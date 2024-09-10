@@ -4,10 +4,6 @@ import PackageDescription
 
 let package = Package(
     name: "SRM",
-    platforms: [
-        .macOS(.v12),
-        .linux
-    ],
     products: [
         .executable(
             name: "srm",
