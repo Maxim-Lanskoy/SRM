@@ -1,27 +1,91 @@
 # SRM - Swift Running Manager
 
-**SRM** (swift-running-manager) is a command-line tool designed to help manage Swift processes and toolchains in a simplified way. Inspired by PM2 (process management) and swiftly (toolchain management), SRM provides a powerful and easy-to-use interface for developers working with Swift.
+SRM is a Swift-based command-line tool designed to manage and monitor Swift applications, inspired by PM2. SRM allows you to easily start, stop, restart, and monitor processes, and provides real-time process tracking.
 
-## Key Features
+## Features
 
-- **Process Management:**
-  - Start, stop, restart, and monitor Swift applications.
-  - Manage multiple Swift applications, similar to PM2 for Node.js.
-  
-- **Swift Toolchain Management:**
-  - Install, update, and manage latest version of the Swift toolchain on macOS, Linux, and ARM-based systems (e.g., Raspberry Pi).
-  - Supports downloading Swift toolchains from custom URLs (for Raspberry Pi, using [futurejones/swift-arm64](https://github.com/futurejones/swift-arm64)).
+- **Process Management**: Start, stop, restart Swift processes.
+- **Monitoring**: Check the status of running processes.
+- **Logging**: Keep track of process logs and monitor errors.
+- **Real-time Process Tracking**: Automatically updates the status of running processes.
 
-- **Cross-platform Support:**
-  - Runs on macOS, Linux, and ARM64 systems (Raspberry Pi and other SBCs).
-  
-## Installation
+## Prerequisites
 
-### 1. Install SRM
+- **Swift 5.8 or later**
 
-To get started with SRM, clone this repository and build the executable using Swift Package Manager.
+Optionally, you can install Swift on Debian-based systems using the following script:
 
 ```bash
-git clone https://github.com/your-username/swift-running-manager.git
+curl -s https://raw.githubusercontent.com/Maxim-Lanskoy/Swiftly/main/install/swiftly-install.sh | bash
+```
+
+## Installation
+
+Clone the repository:
+
+```bash
+git clone https://github.com/yourusername/SRM.git
 cd SRM
-swift build -c release
+```
+
+Build the project:
+
+```bash
+swift build
+```
+
+Run SRM:
+
+```bash
+swift run srm
+```
+
+## Usage
+
+### Starting a Process
+
+You can start a Swift process with the following command:
+
+```bash
+srm start myApp.swift --name myApp
+```
+
+### Stopping a Process
+
+Stop a running process:
+
+```bash
+srm stop myApp
+```
+
+### Restarting a Process
+
+Restart a process:
+
+```bash
+srm restart myApp
+```
+
+### Monitoring Processes
+
+List all running processes and their statuses:
+
+```bash
+srm list
+```
+
+### Real-time Logs
+
+You can monitor logs in real-time:
+
+```bash
+srm logs myApp
+```
+
+### Optional: Installing Swift (Debian-based systems)
+
+To install Swift on Debian-based systems, run:
+
+```bash
+curl -s https://your-debian-swift-installation-url.sh | bash
+```
