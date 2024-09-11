@@ -38,19 +38,11 @@ For distributions such as Arch or others, please follow the official Swift [inst
 1. #### Clone the repository:
 
   ```bash
-  git clone https://github.com/yourusername/SRM.git
+  git clone git@github.com:Maxim-Lanskoy/SRM.git
   cd SRM
   ```
 
-2. #### Build the project:
-
-  Run the following command to build SRM:
-
-```bash
-swift build -c release
-```
-
-3. #### Run SRM Setup:
+2. #### Run SRM Setup:
 
   After building, run the setup to ensure SRM is globally available:
 
@@ -60,12 +52,12 @@ swift run srm setup
 
 This command adds SRM to your $PATH and makes it available from anywhere in your terminal.
 
-4. #### Sourcing Your Shell:
+3. #### Sourcing Your Shell:
 
 Depending on your shell, run:
 
-- For ZSH users: ```source ~/.zshrc```
-- For BASH users: ```source ~/.bashrc```
+- For Linux (ZSH) users: ```source ~/.zshrc```
+- For MacOS (BASH) users: ```source ~/.bashrc```
 
 
 ## 🏃 Usage
@@ -79,19 +71,19 @@ SRM offers a variety of commands to manage and monitor processes, scripts, and e
 - Start any command, executable, or script with a custom name:
 
   ```bash
-  srm run "watch -n 5 free -m" --name MemoryMonitor
+  srm start "watch -n 5 free -m" --name MemoryMonitor
   ```
 
 - Running a Swift application:
   
   ```bash
-  srm run /path/to/swift/app --name SwiftApp
+  srm start /path/to/swift/app --name SwiftApp
   ```
 
 - Running a Shell Script:
   
   ```bash
-  srm run ./myscript.sh --name ScriptRunner
+  srm start ./myscript.sh --name ScriptRunner
   ```
 
 #### 2. Stopping a Process:
@@ -99,7 +91,7 @@ SRM offers a variety of commands to manage and monitor processes, scripts, and e
 Stop a running process by its name:  
 
 ```bash
-srm stop MemoryMonitor
+srm stop ProcessName
 ```
 
 This will send a ```SIGTERM``` signal to the process and remove its logs from SRM.
@@ -117,15 +109,15 @@ srm list
 Fetch the latest 10 lines of logs from any process:
 
 ```bash
-srm logs MemoryMonitor
+srm logs ProcessName
 ```
 
 ## 🔄 Running SRM Setup Again
 
-If for any reason SRM is no longer available in your path, you can re-run the setup command:
+If for any reason SRM is no longer available in your path. or you want to rebuild tool binary, you can re-run the setup command:
 
 ```bash
-swift run srm setup
+srm setup
 ```
 
 ## 🔥 Destroying SRM
@@ -144,34 +136,4 @@ This will:
 
 ## 👨‍💻 How It Works
 
-SRM relies on a forked and improved version of the [ShellOut](https://github.com/Maxim-Lanskoy/ShellOut) library to handle process execution, logging, and management. ShellOut enables SRM to shell out to bash commands, run scripts, or execute binaries directly from Swift code.
-
-## 💻 ShellOut Pre-defined Commands:
-You can also directly use some pre-defined commands using [ShellOut](https://github.com/Maxim-Lanskoy/ShellOut) inside your Swift scripts:
-
-- #### Git Commands:
-
-  ```swift
-  try shellOut(to: .gitClone(url: repositoryURL))
-  try shellOut(to: .gitCommit(message: "Commit message"))
-  ```
-
-- #### File System:
-
-  ```swift
-  try shellOut(to: .createFolder(named: "folderName"))
-  try shellOut(to: .readFile(at: "Podfile"))
-  ```
-
-### Example Swift Code Using ShellOut:
-
-```swift
-import ShellOut
-
-do {
-    let result = try shellOut(to: "echo Hello World")
-    print(result)  // Outputs: Hello World
-} catch {
-    print("Error executing command: \(error)")
-}
-```
+SRM relies on a forked and improved version of the [ShellOut](https://github.com/Maxim-Lanskoy/ShellOut) library to handle process execution, logging, and management. ShellOut enables SRM to use bash commands, run scripts, or execute binaries directly from Swift code.
