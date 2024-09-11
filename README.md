@@ -81,11 +81,3 @@ You can monitor logs in real-time:
 ```bash
 srm logs myApp
 ```
-
-### Optional: Installing Swift (Debian-based systems)
-
-To install Swift on Debian-based systems, run:
-
-```bash
-curl -s https://your-debian-swift-installation-url.sh | bash
-```

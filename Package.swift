@@ -4,32 +4,24 @@ import PackageDescription
 
 let package = Package(
     name: "SRM",
+    platforms: [
+        .macOS(.v10_15) //, .linux
+    ],
     products: [
-        .executable(
-            name: "srm",
-            targets: ["SRM"]
-        ),
+        .executable(name: "srm", targets: ["SRM"]),
     ],
     dependencies: [
-        // Example:
-        // .package(url: "https://github.com/apple/swift-argument-parser", from: "1.1.0"),
+        .package(url: "https://github.com/apple/swift-nio.git", from: "2.33.0"),
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0")
     ],
     targets: [
         .executableTarget(
             name: "SRM",
             dependencies: [
-                // Place to add dependencies from external libraries or modules here, if any
-                // Example: .product(name: "ArgumentParser", package: "swift-argument-parser")
-            ],
-            path: "Sources/SRM",
-            resources: [
-                // If having any resources (e.g., config files), it is possible to define them here
+                .product(name: "NIO", package: "swift-nio"),
+                .product(name: "NIOHTTP1", package: "swift-nio"),
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ]
-        ),
-        .testTarget(
-            name: "SRMTests",
-            dependencies: ["SRM"],
-            path: "Tests/SRMTests"
         )
     ]
 )
