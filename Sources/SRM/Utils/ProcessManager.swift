@@ -1,6 +1,6 @@
 import Foundation
 
-extension ProcessInfo {
+public extension ProcessInfo {
     struct CodableProcessInfo: Codable {
         let environment: [String: String]
         let arguments: [String]

@@ -247,7 +247,6 @@ extension SRM {
                 fileContents = fileContents.replacingOccurrences(of: exportLine, with: "")
                 try fileContents.write(to: configFile, atomically: true, encoding: .utf8)
                 print("SRM removed from \(configFile.path).")
-                print("Please run `source \(configFile.path)` or restart your terminal to apply the changes.")
             } else {
                 print("No SRM setup found in \(configFile.path).")
             }
@@ -269,6 +268,7 @@ extension SRM {
             }
             
             print("SRM destroy process completed.")
+            print("Please run `source \(configFile.path)` or restart your terminal to apply the changes.")
         }
     }
 }
