@@ -11,7 +11,6 @@ let package = Package(
         .executable(name: "srm", targets: ["SRM"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-nio.git", from: "2.33.0"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
         .package(url: "https://github.com/Maxim-Lanskoy/ShellOut.git", from: "2.3.1")
     ],
@@ -19,9 +18,7 @@ let package = Package(
         .executableTarget(
             name: "SRM",
             dependencies: [
-                .product(name: "NIO", package: "swift-nio"),
                 .product(name: "ShellOut", package: "ShellOut"),
-                .product(name: "NIOHTTP1", package: "swift-nio"),
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ]
         )
