@@ -226,7 +226,7 @@ extension SRM {
         static let configuration = CommandConfiguration(abstract: "Remove SRM CLI setup and clean up generated data")
         
         func run() throws {
-            let shell = ProcessInfo().environment["SHELL"] ?? ""
+            let shell = ProcessInfo.processInfo.environment["SHELL"] ?? ""
             let configFile: URL
             
             if shell.contains("zsh") {
