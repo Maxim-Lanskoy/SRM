@@ -1,8 +1,8 @@
 .env
 .DS_Store
 .build
-
 .swiftpm/configuration
 .swiftpm/xcode
 xcuserdata/
 DerivedData/
+Package.resolved

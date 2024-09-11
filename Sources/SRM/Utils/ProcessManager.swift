@@ -1,32 +1,5 @@
 import Foundation
 
-struct ProcessManager {
-    static let logsDirectory = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".srm/logs")
-
-    static func saveProcessInfo(_ process: ProcessInfo) throws {
-        guard let data = process.encodeToJSON() else {
-            throw RuntimeError("Failed to encode process info.")
-        }
-        let filePath = logsDirectory.appendingPathComponent("\(process.processName).json")
-        try data.write(to: filePath)
-    }
-
-    static func fetchProcessInfo(for name: String) throws -> ProcessInfo.CodableProcessInfo? {
-        let filePath = logsDirectory.appendingPathComponent("\(name).json")
-        guard FileManager.default.fileExists(atPath: filePath.path) else {
-            return nil
-        }
-        let data = try Data(contentsOf: filePath)
-        return ProcessInfo.decodeFromJSON(data)
-    }
-
-    static func log(for process: ProcessInfo) throws -> String {
-        let logFile = logsDirectory.appendingPathComponent("\(process.processName).log")
-        let logData = try String(contentsOf: logFile, encoding: .utf8)
-        return logData.split(separator: "\n").suffix(10).joined(separator: "\n")
-    }
-}
-
 extension ProcessInfo {
     struct CodableProcessInfo: Codable {
         let environment: [String: String]
@@ -66,5 +39,26 @@ extension ProcessInfo {
     static func decodeFromJSON(_ data: Data) -> CodableProcessInfo? {
         let decoder = JSONDecoder()
         return try? decoder.decode(CodableProcessInfo.self, from: data)
+    }
+}
+
+struct ProcessManager {
+    static let logsDirectory = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".srm/logs")
+
+    static func saveProcessInfo(_ process: ProcessInfo.CodableProcessInfo) throws {
+        let data = try JSONEncoder().encode(process)
+        let filePath = logsDirectory.appendingPathComponent("\(process.processName).json")
+        try data.write(to: filePath)
+    }
+
+    static func fetchProcessInfo(for name: String) throws -> ProcessInfo.CodableProcessInfo? {
+        let filePath = logsDirectory.appendingPathComponent("\(name).json")
+        let data = try Data(contentsOf: filePath)
+        return try JSONDecoder().decode(ProcessInfo.CodableProcessInfo.self, from: data)
+    }
+
+    static func removeProcessInfo(for name: String) throws {
+        let filePath = logsDirectory.appendingPathComponent("\(name).json")
+        try FileManager.default.removeItem(at: filePath)
     }
 }
