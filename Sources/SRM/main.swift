@@ -47,7 +47,7 @@ struct SRM: ParsableCommand {
             
             do {
                 // Start the process using ShellOut, redirecting output to log file
-                let processOutput = try shellOut(
+                _ = try shellOut(
                     to: command,
                     at: ".",
                     outputHandle: FileHandle(forWritingAtPath: logFilePath),
@@ -159,13 +159,13 @@ extension SRM {
             
             // Step 2: Check if '.build/release' is in the user's PATH
             let buildPath = "$(pwd)/.build/release"
-            let currentPath = ProcessInfo().environment["PATH"] ?? ""
+            let currentPath = ProcessInfo.processInfo.environment["PATH"] ?? ""
             
             if !currentPath.contains(buildPath) {
                 print("Adding .build/release to PATH...")
                 
                 // Step 3: Detect the shell type and corresponding config file
-                let shell = ProcessInfo().environment["SHELL"] ?? ""
+                let shell = ProcessInfo.processInfo.environment["SHELL"] ?? ""
                 let configFile: URL
                 var shellType = ""
                 
