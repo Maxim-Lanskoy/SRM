@@ -4,10 +4,10 @@ SRM is a lightweight, Swift-based command-line tool designed to help you manage,
 
 ## ✨ Features
 
-- 🚦 **Process Management**: Start, stop, and restart processes like commands, binaries, or Swift applications.
-- 🛑 **Stop All Processes**: Easily stop all managed processes with a single command.
+- 🚦 **Process Management**: Start, stop, restart, and delete processes like commands, binaries, or Swift applications.
+- 🛑 **Stop and Delete All Processes**: Easily stop or delete all managed processes with a single command.
 - 📊 **Monitoring**: List all processes with real-time tracking, including CPU and memory usage.
-- 📜 **Logging**: Automatically store and fetch logs for each process, with support for real-time log tailing.
+- 📜 **Logging**: Automatically store and fetch logs for each process, with real-time log tailing by default.
 - ❗ **Process Statuses**: Processes retain their status (`running`, `stopped`, `error`), even if they fail to start.
 - ♻️ **Auto-Restart**: Automatically restart processes if they crash, ensuring continuous uptime.
 - 🔄 **Log Rotation**: Prevent log files from becoming too large with automatic log rotation.
@@ -113,6 +113,12 @@ SRM offers a variety of commands to manage and monitor processes, scripts, and e
   srm start ./myapp --name MyApp --restart
   ```
 
+- **Start all stopped processes:**
+
+  ```bash
+  srm start all
+  ```
+
 #### 2. Stopping a Process:
 
 - **Stop a running process by its name:**
@@ -121,19 +127,61 @@ SRM offers a variety of commands to manage and monitor processes, scripts, and e
   srm stop ProcessName
   ```
 
-  This command will stop the process and update its status to `stopped` in SRM.
+- **Stop a process by index:**
+
+  ```bash
+  srm stop 1
+  ```
 
 - **Stop all managed processes:**
 
   ```bash
-  srm stop --all
+  srm stop all
   ```
 
-  This will stop all processes managed by SRM and update their statuses to `stopped`.
+#### 3. Restarting a Process:
 
-#### 3. Listing Processes:
+- **Restart a process by its name:**
 
-See a list of all processes and their statuses, including CPU and memory usage:
+  ```bash
+  srm restart ProcessName
+  ```
+
+- **Restart a process by index:**
+
+  ```bash
+  srm restart 1
+  ```
+
+- **Restart all processes:**
+
+  ```bash
+  srm restart all
+  ```
+
+#### 4. Deleting a Process:
+
+- **Delete a process from SRM by its name:**
+
+  ```bash
+  srm delete ProcessName
+  ```
+
+- **Delete a process by index:**
+
+  ```bash
+  srm delete 1
+  ```
+
+- **Delete all processes from SRM:**
+
+  ```bash
+  srm delete all
+  ```
+
+#### 5. Listing Processes:
+
+See a numbered list of all processes and their statuses, including CPU and memory usage:
 
 ```bash
 srm list
@@ -148,33 +196,44 @@ srm ls
 **Example Output:**
 
 ```
-Name                Status     PID       CPU%     MEM%     Start Time
-MyApp               running    12345     2.3      1.5      2024-10-11 12:34:56
-FailedProcess       error      0         N/A      N/A      N/A
-StoppedProcess      stopped    0         N/A      N/A      N/A
+┌───────┬───────────────┬──────────┬───────┬──────┬──────┬─────────────────────┐
+│ Index │ Name          │ Status   │ PID   │ CPU% │ MEM% │ Start Time          │
+├───────┼───────────────┼──────────┼───────┼──────┼──────┼─────────────────────┤
+│ 1     │ MyApp         │ running  │ 12345 │ 2.3  │ 1.5  │ 2024-10-11 12:34:56 │
+├───────┼───────────────┼──────────┼───────┼──────┼──────┼─────────────────────┤
+│ 2     │ FailedProcess │ error    │ 0     │ N/A  │ N/A  │ N/A                 │
+├───────┼───────────────┼──────────┼───────┼──────┼──────┼─────────────────────┤
+│ 3     │ StoppedProcess│ stopped  │ 0     │ N/A  │ N/A  │ N/A                 │
+└───────┴───────────────┴──────────┴───────┴──────┴──────┴─────────────────────┘
 ```
 
-#### 4. Viewing Logs:
+#### 6. Viewing Logs:
 
-- **Fetch the latest 10 lines of logs from any process:**
+- **Fetch the latest 10 lines and follow logs from any process:**
 
   ```bash
   srm logs ProcessName
   ```
 
-- **View a specific number of lines:**
+- **View a specific number of lines and follow:**
 
   ```bash
   srm logs ProcessName --lines 50
   ```
 
-- **Tail logs in real-time:**
+- **View logs without following:**
 
   ```bash
-  srm logs ProcessName --follow
+  srm logs ProcessName --no-follow
   ```
 
-#### 5. Monitoring Processes:
+- **View logs for all processes:**
+
+  ```bash
+  srm logs all
+  ```
+
+#### 7. Monitoring Processes:
 
 Start the SRM monitoring service to automatically restart processes if they crash (required if using the `--restart` flag):
 
@@ -240,4 +299,5 @@ SRM is compatible with:
 - **Viewing Logs for Failed Processes**: You can view logs for processes that failed to start to help debug issues.
 - **Log Rotation**: SRM automatically rotates logs when they exceed 5 MB to prevent log files from becoming too large.
 - **Auto-Restart**: Use the `--restart` flag when starting a process to have SRM automatically restart it if it crashes. Ensure the monitoring service is running with `srm monitor`.
+- **Process Indexing**: Use the index number from `srm list` to refer to processes in commands.
 - **Aliases**: Use `srm ls` as a shortcut for `srm list`.
