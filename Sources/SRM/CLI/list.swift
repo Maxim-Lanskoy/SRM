@@ -21,28 +21,35 @@ extension SRM {
             """,
             aliases: ["ls"]
         )
-
+        
         func run() throws {
             let processInfos = try ProcessManager.fetchAllProcessInfos()
-
+            
             if processInfos.isEmpty {
-                print("No running processes found.")
+                print("No processes found.")
                 return
             }
-
-            print(String(format: "%-20s %-8s %-8s %-8s %-20s", "Name", "PID", "CPU%", "MEM%", "Start Time"))
+            
+            // Print header
+            print("Name    PID    CPU%    MEM%    Start Time")
+            
             for processInfo in processInfos {
-                let pid = processInfo.processIdentifier
-                if isProcessRunning(pid: pid) {
-                    let cpuUsage = getCPUUsage(pid: pid)
-                    let memUsage = getMemoryUsage(pid: pid)
-                    let startTime = formatDate(processInfo.startTime)
-
-                    print(String(format: "%-20s %-8d %-8s %-8s %-20s", processInfo.processName, pid, cpuUsage, memUsage, startTime))
-                } else {
-                    // Process is not running, remove its info
-                    try? ProcessManager.removeProcessInfo(for: processInfo.processName)
+                var status = processInfo.status
+                let pid = processInfo.processIdentifier ?? 0
+                let startTime = processInfo.startTime != nil ? formatDate(processInfo.startTime!) : "N/A"
+                var cpuUsage = "N/A"
+                var memUsage = "N/A"
+                
+                if let pid = processInfo.processIdentifier, isProcessRunning(pid: pid) {
+                    cpuUsage = getCPUUsage(pid: pid)
+                    memUsage = getMemoryUsage(pid: pid)
+                    status = "running"
+                } else if status == "running" {
+                    // Process was marked as running but is no longer running
+                    status = "stopped"
                 }
+                //print(String(format: "%-20s %-10s %-8d %-8s %-8s %-20s", processInfo.processName, status, pid, cpuUsage, memUsage, startTime))
+                print("Name: \(processInfo.processName), PID: \(pid), CPU%: \(cpuUsage), MEM%: \(memUsage), Start Time: \(startTime)")
             }
         }
 

@@ -9,11 +9,12 @@ import Foundation
 
 struct CodableProcessInfo: Codable {
     let processName: String
-    let processIdentifier: Int32
-    let startTime: Date
+    var processIdentifier: Int32?
+    var startTime: Date?
     let restart: Bool
     let executable: String
     let logFilePath: String
+    var status: String
 }
 
 struct ProcessManager {
@@ -34,12 +35,8 @@ struct ProcessManager {
         return try JSONDecoder().decode(CodableProcessInfo.self, from: data)
     }
 
-    static func removeProcessInfo(for name: String) throws {
-        let filePath = logsDirectory.appendingPathComponent("\(name).json")
-        if FileManager.default.fileExists(atPath: filePath.path) {
-            try FileManager.default.removeItem(at: filePath)
-        }
-    }
+    // Remove function to delete process info when not running
+    // We will no longer remove process info files when processes stop
 
     static func fetchAllProcessInfos() throws -> [CodableProcessInfo] {
         let files = try FileManager.default.contentsOfDirectory(at: logsDirectory, includingPropertiesForKeys: nil)

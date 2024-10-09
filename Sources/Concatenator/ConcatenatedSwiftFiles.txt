@@ -99,7 +99,7 @@ extension SRM {
             }
 
             if !configFileFound {
-                print("No SRM setup found in shell configuration files.")
+                print("No SRM PATH entry found in shell configuration files.")
             }
 
             // Delete the binary and the build directory
@@ -157,7 +157,9 @@ extension SRM {
                 return
             }
 
-            print(String(format: "%-20s %-8s %-8s %-8s %-20s", "Name", "PID", "CPU%", "MEM%", "Start Time"))
+            // Print header
+            print("Name    PID    CPU%    MEM%    Start Time")
+
             for processInfo in processInfos {
                 let pid = processInfo.processIdentifier
                 if isProcessRunning(pid: pid) {
@@ -165,7 +167,17 @@ extension SRM {
                     let memUsage = getMemoryUsage(pid: pid)
                     let startTime = formatDate(processInfo.startTime)
 
-                    print(String(format: "%-20s %-8d %-8s %-8s %-20s", processInfo.processName, pid, cpuUsage, memUsage, startTime))
+                    // Use string interpolation instead of String(format:)
+                    /*let output = String(
+                        format: "%-20@ %-8d %-8@ %-8@ %-20@",
+                        processInfo.processName as NSString,
+                        pid,
+                        cpuUsage as NSString,
+                        memUsage as NSString,
+                        startTime as NSString
+                    )
+                    print(output)*/
+                    print("Name: \(processInfo.processName), PID: \(pid), CPU%: \(cpuUsage), MEM%: \(memUsage), Start Time: \(startTime)")
                 } else {
                     // Process is not running, remove its info
                     try? ProcessManager.removeProcessInfo(for: processInfo.processName)

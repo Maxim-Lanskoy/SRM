@@ -35,16 +35,16 @@ extension SRM {
 
         @Flag(name: .shortAndLong, help: "Automatically restart the process if it exits unexpectedly.")
         var restart: Bool = false
-
+        
         func run() throws {
             let processName = name ?? URL(fileURLWithPath: executable).lastPathComponent
             print("Starting process: \(processName)")
-
+            
             // Ensure logs directory exists
             try FileManager.default.createDirectory(at: ProcessManager.logsDirectory, withIntermediateDirectories: true, attributes: nil)
-
+            
             let logFilePath = ProcessManager.logsDirectory.appendingPathComponent("\(processName).log").path
-
+            
             // Rotate log if it exceeds size limit (e.g., 5 MB)
             let maxLogSize: UInt64 = 5 * 1024 * 1024 // 5 MB
             if let attributes = try? FileManager.default.attributesOfItem(atPath: logFilePath),
@@ -58,29 +58,45 @@ extension SRM {
                 try FileManager.default.moveItem(atPath: logFilePath, toPath: archivedLogPath.path)
                 print("Rotated log file to \(archivedLogPath.lastPathComponent)")
             }
-
+            
             // Build the command to start the process with nohup and redirect output to log file
             let command = "nohup \(executable) >> \(logFilePath) 2>&1 & echo $!"
-
-            // Run the command and capture the output (PID)
-            let output = try shellOut(to: command)
-            let pidString = output.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
-            guard let pid = Int32(pidString) else {
-                throw RuntimeError("Failed to retrieve PID of the started process.")
+            
+            do {
+                // Run the command and capture the output (PID)
+                let output = try shellOut(to: command)
+                let pidString = output.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+                guard let pid = Int32(pidString) else {
+                    throw RuntimeError("Failed to retrieve PID of the started process.")
+                }
+                
+                // Save process info with status "running"
+                let processInfo = CodableProcessInfo(
+                    processName: processName,
+                    processIdentifier: pid,
+                    startTime: Date(),
+                    restart: restart,
+                    executable: executable,
+                    logFilePath: logFilePath,
+                    status: "running"
+                )
+                try ProcessManager.saveProcessInfo(processInfo)
+                
+                print("Process \(processName) started with PID: \(pid).")
+            } catch {
+                print("Failed to start process \(processName): \(error)")
+                // Save process info with status "error"
+                let processInfo = CodableProcessInfo(
+                    processName: processName,
+                    processIdentifier: nil,
+                    startTime: nil,
+                    restart: restart,
+                    executable: executable,
+                    logFilePath: logFilePath,
+                    status: "error"
+                )
+                try ProcessManager.saveProcessInfo(processInfo)
             }
-
-            // Save process info
-            let processInfo = CodableProcessInfo(
-                processName: processName,
-                processIdentifier: pid,
-                startTime: Date(),
-                restart: restart,
-                executable: executable,
-                logFilePath: logFilePath
-            )
-            try ProcessManager.saveProcessInfo(processInfo)
-
-            print("Process \(processName) started with PID: \(pid).")
         }
     }
 }
