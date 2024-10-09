@@ -8,6 +8,7 @@
 import ArgumentParser
 import Foundation
 import ShellOut
+import CLITable
 
 extension SRM {
     struct List: ParsableCommand {
@@ -24,22 +25,25 @@ extension SRM {
         
         func run() throws {
             let processInfos = try ProcessManager.fetchAllProcessInfos()
-            
+
             if processInfos.isEmpty {
                 print("No processes found.")
                 return
             }
-            
-            // Print header
-            print("Name    PID    CPU%    MEM%    Start Time")
-            
-            for processInfo in processInfos {
+
+            // Create headers for the table, including Index
+            let headers = ["Index", "Name", "Status", "PID", "CPU%", "MEM%", "Start Time"]
+
+            // Initialize the table with headers
+            var table = CLITable(headers: headers)
+
+            for (index, processInfo) in processInfos.enumerated() {
                 var status = processInfo.status
                 let pid = processInfo.processIdentifier ?? 0
                 let startTime = processInfo.startTime != nil ? formatDate(processInfo.startTime!) : "N/A"
                 var cpuUsage = "N/A"
                 var memUsage = "N/A"
-                
+
                 if let pid = processInfo.processIdentifier, isProcessRunning(pid: pid) {
                     cpuUsage = getCPUUsage(pid: pid)
                     memUsage = getMemoryUsage(pid: pid)
@@ -48,9 +52,21 @@ extension SRM {
                     // Process was marked as running but is no longer running
                     status = "stopped"
                 }
-                //print(String(format: "%-20s %-10s %-8d %-8s %-8s %-20s", processInfo.processName, status, pid, cpuUsage, memUsage, startTime))
-                print("Name: \(processInfo.processName), PID: \(pid), CPU%: \(cpuUsage), MEM%: \(memUsage), Start Time: \(startTime)")
+
+                // Add a row to the table
+                table.addRow([
+                    "\(index + 1)",
+                    processInfo.processName,
+                    status,
+                    "\(pid)",
+                    cpuUsage,
+                    memUsage,
+                    startTime
+                ])
             }
+
+            // Display the table
+            table.showTable()
         }
 
         func isProcessRunning(pid: Int32) -> Bool {

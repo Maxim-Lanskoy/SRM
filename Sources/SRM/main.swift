@@ -24,11 +24,13 @@ struct SRM: ParsableCommand {
         subcommands: [
             Start.self,
             Stop.self,
+            Restart.self,
             List.self,
             Logs.self,
             Monitor.self,
             Setup.self,
             Destroy.self,
+            Delete.self,
             HelpCommand.self
         ],
         defaultSubcommand: HelpCommand.self

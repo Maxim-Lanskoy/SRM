@@ -34,9 +34,18 @@ struct ProcessManager {
         let data = try Data(contentsOf: filePath)
         return try JSONDecoder().decode(CodableProcessInfo.self, from: data)
     }
+    
+    static func removeProcessInfo(for name: String) throws {
+        let filePath = logsDirectory.appendingPathComponent("\(name).json")
+        if FileManager.default.fileExists(atPath: filePath.path) {
+            try FileManager.default.removeItem(at: filePath)
+        }
 
-    // Remove function to delete process info when not running
-    // We will no longer remove process info files when processes stop
+        let logFilePath = logsDirectory.appendingPathComponent("\(name).log")
+        if FileManager.default.fileExists(atPath: logFilePath.path) {
+            try FileManager.default.removeItem(at: logFilePath)
+        }
+    }
 
     static func fetchAllProcessInfos() throws -> [CodableProcessInfo] {
         let files = try FileManager.default.contentsOfDirectory(at: logsDirectory, includingPropertiesForKeys: nil)

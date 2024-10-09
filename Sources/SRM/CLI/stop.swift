@@ -14,27 +14,27 @@ extension SRM {
         static let configuration = CommandConfiguration(
             abstract: "Stop a running process managed by SRM.",
             discussion: """
-            The `stop` command stops a running process by its name.
+            The `stop` command stops a running process by its name or index.
 
             Examples:
-              - Stop a process: `srm stop MyApp`
-              - Stop all processes: `srm stop --all`
+              - Stop a process by name: `srm stop MyApp`
+              - Stop a process by index: `srm stop 1`
+              - Stop all processes: `srm stop all`
             """
         )
-
-        @Argument(help: "Name of the process to stop.")
-        var name: String?
-
-        @Flag(name: .shortAndLong, help: "Stop all running processes.")
-        var all: Bool = false
+        
+        @Argument(help: "Name or index of the process to stop, or 'all' to stop all processes.")
+        var nameOrIndex: String
 
         func run() throws {
-            if all {
+            if nameOrIndex.lowercased() == "all" {
                 try stopAllProcesses()
-            } else if let processName = name {
-                try stopProcess(named: processName)
+            } else if let index = Int(nameOrIndex) {
+                // Stop process by index
+                try stopProcess(atIndex: index)
             } else {
-                print("Please specify a process name or use '--all' to stop all processes.")
+                // Stop process by name
+                try stopProcess(named: nameOrIndex)
             }
         }
 
@@ -69,6 +69,17 @@ extension SRM {
             } catch {
                 print("An error occurred: \(error.localizedDescription)")
             }
+        }
+
+        func stopProcess(atIndex index: Int) throws {
+            let processInfos = try ProcessManager.fetchAllProcessInfos()
+            if index < 1 || index > processInfos.count {
+                print("Invalid process index: \(index)")
+                return
+            }
+
+            let processInfo = processInfos[index - 1]
+            try stopProcess(named: processInfo.processName)
         }
 
         func stopAllProcesses() throws {

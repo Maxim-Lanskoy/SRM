@@ -1,6 +1,24 @@
 {
   "pins" : [
     {
+      "identity" : "cli-table-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/heroesofcode/CLI-Table-Swift",
+      "state" : {
+        "branch" : "main",
+        "revision" : "c64517e3fe323df92c512ec02da4985fb8e1e14a"
+      }
+    },
+    {
+      "identity" : "rainbow",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/onevcat/Rainbow",
+      "state" : {
+        "revision" : "e0dada9cd44e3fa7ec3b867e49a8ddbf543e3df3",
+        "version" : "4.0.1"
+      }
+    },
+    {
       "identity" : "shellout",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Maxim-Lanskoy/ShellOut.git",

@@ -10,7 +10,7 @@ import Foundation
 import ShellOut
 
 extension SRM {
-    struct Start: ParsableCommand {
+    struct Start: ParsableCommand {        
         static let configuration = CommandConfiguration(
             abstract: "Start a new process managed by SRM.",
             discussion: """
@@ -22,21 +22,33 @@ extension SRM {
               - Start a command: `srm start "python script.py" --name PythonScript`
 
             Options:
+              - Start all stopped processes: `srm start all`
               - You can specify a custom name using `--name`.
               - Use `--restart` to automatically restart the process if it crashes.
             """
         )
 
-        @Argument(help: "The script, command, or executable to run.")
-        var executable: String
-
+        @Argument(help: "The script, command, or executable to run, or 'all' to start all stopped processes.")
+        var executableOrName: String?
+        
         @Option(name: .shortAndLong, help: "Specify a custom name for the process.")
         var name: String?
-
+        
         @Flag(name: .shortAndLong, help: "Automatically restart the process if it exits unexpectedly.")
         var restart: Bool = false
         
         func run() throws {
+            if executableOrName?.lowercased() == "all" {
+                try startAllProcesses()
+            } else if let executable = executableOrName {
+                // Start a new process with the provided executable
+                try startProcess(executable: executable, name: name, restart: restart)
+            } else {
+                print("Please provide an executable to start or 'all' to start all stopped processes.")
+            }
+        }
+        
+        func startProcess(executable: String, name: String?, restart: Bool) throws {
             let processName = name ?? URL(fileURLWithPath: executable).lastPathComponent
             print("Starting process: \(processName)")
             
@@ -96,6 +108,20 @@ extension SRM {
                     status: "error"
                 )
                 try ProcessManager.saveProcessInfo(processInfo)
+            }
+        }
+        
+        func startAllProcesses() throws {
+            let processInfos = try ProcessManager.fetchAllProcessInfos()
+            let stoppedProcesses = processInfos.filter { $0.status == "stopped" || $0.status == "error" }
+            
+            if stoppedProcesses.isEmpty {
+                print("No stopped processes to start.")
+                return
+            }
+            
+            for processInfo in stoppedProcesses {
+                try startProcess(executable: processInfo.executable, name: processInfo.processName, restart: processInfo.restart)
             }
         }
     }
