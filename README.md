@@ -5,8 +5,10 @@ SRM is a lightweight, Swift-based command-line tool designed to help you manage,
 ## ✨ Features
 
 - 🚦 **Process Management**: Start, stop, and restart processes like commands, binaries, or Swift applications.
-- 📊 **Monitoring**: List all running processes with real-time tracking, including CPU and memory usage.
+- 🛑 **Stop All Processes**: Easily stop all managed processes with a single command.
+- 📊 **Monitoring**: List all processes with real-time tracking, including CPU and memory usage.
 - 📜 **Logging**: Automatically store and fetch logs for each process, with support for real-time log tailing.
+- ❗ **Process Statuses**: Processes retain their status (`running`, `stopped`, `error`), even if they fail to start.
 - ♻️ **Auto-Restart**: Automatically restart processes if they crash, ensuring continuous uptime.
 - 🔄 **Log Rotation**: Prevent log files from becoming too large with automatic log rotation.
 - 🎯 **Flexibility**: Run shell commands, executables, or scripts seamlessly.
@@ -113,17 +115,25 @@ SRM offers a variety of commands to manage and monitor processes, scripts, and e
 
 #### 2. Stopping a Process:
 
-Stop a running process by its name:
+- **Stop a running process by its name:**
 
-```bash
-srm stop ProcessName
-```
+  ```bash
+  srm stop ProcessName
+  ```
 
-This command will stop the process and remove its logs from SRM.
+  This command will stop the process and update its status to `stopped` in SRM.
+
+- **Stop all managed processes:**
+
+  ```bash
+  srm stop --all
+  ```
+
+  This will stop all processes managed by SRM and update their statuses to `stopped`.
 
 #### 3. Listing Processes:
 
-See a list of all active processes and their status, including CPU and memory usage:
+See a list of all processes and their statuses, including CPU and memory usage:
 
 ```bash
 srm list
@@ -133,6 +143,15 @@ You can also use the alias:
 
 ```bash
 srm ls
+```
+
+**Example Output:**
+
+```
+Name                Status     PID       CPU%     MEM%     Start Time
+MyApp               running    12345     2.3      1.5      2024-10-11 12:34:56
+FailedProcess       error      0         N/A      N/A      N/A
+StoppedProcess      stopped    0         N/A      N/A      N/A
 ```
 
 #### 4. Viewing Logs:
@@ -163,11 +182,7 @@ Start the SRM monitoring service to automatically restart processes if they cras
 srm monitor
 ```
 
-**Note:** To run the monitor in the background:
-
-```bash
-nohup srm monitor > /dev/null 2>&1 &
-```
+**Note:** The background monitoring feature will be implemented in a future release. For now, you need to keep the terminal window open while running the monitor service.
 
 ## 🔄 Running SRM Setup Again
 
@@ -221,6 +236,24 @@ SRM is compatible with:
 ## 💡 Tips
 
 - **Process Names**: If you don't specify a process name using `--name`, SRM will use the executable's name by default.
+- **Process Statuses**: SRM keeps track of each process's status (`running`, `stopped`, `error`), allowing you to monitor and debug processes effectively.
+- **Viewing Logs for Failed Processes**: You can view logs for processes that failed to start to help debug issues.
 - **Log Rotation**: SRM automatically rotates logs when they exceed 5 MB to prevent log files from becoming too large.
 - **Auto-Restart**: Use the `--restart` flag when starting a process to have SRM automatically restart it if it crashes. Ensure the monitoring service is running with `srm monitor`.
 - **Aliases**: Use `srm ls` as a shortcut for `srm list`.
+
+---
+
+This updated README reflects the latest changes and functionality of SRM. It includes:
+
+- **New Features:**
+  - Ability to stop all processes using `srm stop --all`.
+  - Processes retain their status (`running`, `stopped`, `error`), even if they fail to start.
+  - Ability to view logs for failed processes to debug issues.
+- **Removed References to Background Monitoring with `nohup`:**
+  - The background monitoring feature will be implemented in a future release.
+  - For now, the `srm monitor` command needs to run in an open terminal window.
+- **Updated Usage Examples:**
+  - Demonstrates how to use new flags and options, such as stopping all processes.
+- **Updated Tips Section:**
+  - Provides information on process statuses and viewing logs for failed processes.
