@@ -1,74 +1,71 @@
 //
-//  File.swift
-//  
+//  setup.swift
+//  Swift Running Manager
 //
 //  Created by Maxim Lanskoy on 11.09.2024.
 //
 
 import ArgumentParser
 import Foundation
-import ShellOut
 
 extension SRM {
     struct Setup: ParsableCommand {
-        static let configuration = CommandConfiguration(abstract: "Setup the SRM CLI globally")
-        
+        static let configuration = CommandConfiguration(
+            abstract: "Setup the SRM CLI globally.",
+            discussion: """
+            The `setup` command builds the SRM tool and adds it to your PATH.
+
+            - Detects your shell and updates the appropriate configuration file.
+            - Supports zsh, bash, and other common shells.
+            """
+        )
+
         func run() throws {
             // Step 1: Build the release version
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
             process.arguments = ["swift", "build", "-c", "release"]
-            
+
             try process.run()
             process.waitUntilExit()
-            
+
             let result = process.terminationStatus
             if result != 0 {
                 throw RuntimeError("Build failed.")
             }
-            
+
             // Step 2: Check if '.build/release' is in the user's PATH
             let buildPath = "$(pwd)/.build/release"
             let currentPath = ProcessInfo.processInfo.environment["PATH"] ?? ""
-            
+
             if !currentPath.contains(buildPath) {
                 print("Adding .build/release to PATH...")
-                
-                // Step 3: Detect the shell type and corresponding config file
-                let shell = ProcessInfo.processInfo.environment["SHELL"] ?? ""
-                let configFile: URL
-                var shellType = ""
-                
-                if shell.contains("zsh") {
-                    configFile = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".zshrc")
-                    shellType = "zsh"
-                } else if shell.contains("bash") {
-                    configFile = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".bashrc")
-                    shellType = "bash"
-                } else {
-                    print("Unsupported shell. Please manually add .build/release to your PATH.")
-                    return
+
+                // Detect shell configuration files
+                let shellConfigFiles = [".zshrc", ".bashrc", ".bash_profile", ".profile"]
+                var configFileFound = false
+
+                for fileName in shellConfigFiles {
+                    let configFile = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(fileName)
+                    if FileManager.default.fileExists(atPath: configFile.path) {
+                        // Add the .build/release path to the shell configuration file if not already present
+                        let exportLine = "export PATH=\"$PATH:\(buildPath)\""
+                        try appendToShellConfig(configFile: configFile, exportLine: exportLine)
+                        print("SRM setup completed successfully in \(configFile.path).")
+                        print("Please run `source \(configFile.path)` or restart your terminal to apply the changes.")
+                        configFileFound = true
+                        break
+                    }
                 }
-                
-                // Step 4: Add the .build/release path to the shell configuration file if not already present
-                let exportLine = "export PATH=\"$PATH:\(buildPath)\""
-                try appendToShellConfig(configFile: configFile, exportLine: exportLine)
-                
-                // Step 5: Provide shell-specific advice
-                print("SRM setup completed successfully.")
-                switch shellType {
-                case "zsh":
-                    print("Please run `source ~/.zshrc` or restart your terminal to apply the changes.")
-                case "bash":
-                    print("Please run `source ~/.bashrc` or restart your terminal to apply the changes.")
-                default:
-                    print("Please restart your terminal to apply the changes.")
+
+                if !configFileFound {
+                    print("No supported shell configuration file found. Please manually add .build/release to your PATH.")
                 }
             } else {
                 print(".build/release is already in PATH.")
             }
         }
-        
+
         // Helper function to append to the shell config file only if the export line doesn't exist
         func appendToShellConfig(configFile: URL, exportLine: String) throws {
             let fileContent = (try? String(contentsOf: configFile)) ?? ""

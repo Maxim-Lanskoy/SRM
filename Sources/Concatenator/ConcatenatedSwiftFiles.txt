@@ -1,0 +1,759 @@
+**System Instructions:** 
+// Use the provided request and concatenated code to address the user's issue or implement new features. 
+// Return only the runnable Swift code block without any markdown syntax (no "```swift" or "```").
+// Ensure the code includes necessary imports, the main structure, and all relevant functions.
+// The code should be self-contained and executable when placed into `result.swift`.
+// Do not include any explanations, comments, or repeated parts from the input code.
+
+**Request: "-=-=-=-".**
+
+**Project Details:** SRM This is a lightweight, Swift-based command-line tool designed to help manage, monitor, and control various processes, including Swift applications, shell scripts, binaries, and commands. Inspired by PM2, it provides an intuitive interface for starting, stopping, monitoring processes, and viewing real-time logs.
+    
+**✨ Features**
+- 🚦 Process Management: Start, stop, restart processes like commands, binaries, or Swift applications.
+- 📊 Monitoring: List all running processes with real-time tracking.
+- 📜 Logging: Automatically store and fetch logs for each process.
+- 🎯 Flexibility: Run shell commands, executables, or scripts seamlessly.
+  
+**🏃 Usage**
+SRM should offer a variety of commands to manage and monitor processes, scripts, and executables.
+🔧 General Commands should look similar to this list.
+1. Starting a Process:
+- Start any command, executable, or script with a custom name:
+    "srm start "watch -n 5 free -m" --name MemoryMonitor"
+- Running a Swift application:
+    "srm start /path/to/swift/app --name SwiftApp"
+- Running a Shell Script:
+    "srm start ./myscript.sh --name ScriptRunner"
+2. Stopping a Process:
+- Stop a running process by its name:
+    "srm stop ProcessName"
+- This will send a SIGTERM signal to the process and remove its logs from SRM.
+3. Listing Processes:
+- See a list of all active processes and their status:
+    "srm list"
+4. Viewing Logs:
+- Fetch the latest 10 lines of logs from any process:
+    "srm logs ProcessName"
+
+This is basic info about SRM tool overall vision and expected features.
+Project File Structure:
+📁 Sources
+    📁 SRM
+        📄 main.swift
+        📁 CLI
+            📄 destroy.swift
+            📄 list.swift
+            📄 logs.swift
+            📄 minotor.swift
+            📄 setup.swift
+            📄 start.swift
+            📄 stop.swift
+        📁 Utils
+            📄 ProcessManager.swift
+
+// File: destroy.swift | Path: /Users/maximlanskoy/SRM/Sources/SRM/CLI/destroy.swift
+//
+//  destroy.swift
+//  Swift Running Manager
+//
+//  Created by Maxim Lanskoy on 11.09.2024.
+//
+
+import ArgumentParser
+import Foundation
+
+extension SRM {
+    struct Destroy: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Remove SRM CLI setup and clean up generated data.",
+            discussion: """
+            The `destroy` command removes SRM from your system.
+
+            - Removes PATH entries from shell configuration files.
+            - Deletes built binaries and log files.
+            """
+        )
+
+        func run() throws {
+            // Detect shell configuration files
+            let shellConfigFiles = [".zshrc", ".bashrc", ".bash_profile", ".profile"]
+            var configFileFound = false
+
+            for fileName in shellConfigFiles {
+                let configFile = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(fileName)
+                if FileManager.default.fileExists(atPath: configFile.path) {
+                    let buildPath = "$(pwd)/.build/release"
+                    let exportLine = "export PATH=\"$PATH:\(buildPath)\""
+
+                    // Remove the export line from the shell configuration file
+                    var fileContents = try String(contentsOf: configFile, encoding: .utf8)
+                    if fileContents.contains(exportLine) {
+                        fileContents = fileContents.replacingOccurrences(of: exportLine, with: "")
+                        try fileContents.write(to: configFile, atomically: true, encoding: .utf8)
+                        print("SRM removed from \(configFile.path).")
+                        configFileFound = true
+                        break
+                    }
+                }
+            }
+
+            if !configFileFound {
+                print("No SRM setup found in shell configuration files.")
+            }
+
+            // Delete the binary and the build directory
+            let releaseDirectory = FileManager.default.currentDirectoryPath.appending("/.build/release")
+            if FileManager.default.fileExists(atPath: releaseDirectory) {
+                try FileManager.default.removeItem(atPath: releaseDirectory)
+                print("Deleted release directory: \(releaseDirectory).")
+            }
+
+            // Delete log and other generated files (if any)
+            let logsDirectory = ProcessManager.logsDirectory
+            if FileManager.default.fileExists(atPath: logsDirectory.path) {
+                try FileManager.default.removeItem(at: logsDirectory)
+                print("Deleted logs and generated data at \(logsDirectory.path).")
+            } else {
+                print("No logs or generated data found.")
+            }
+
+            print("SRM destroy process completed.")
+            print("Please restart your terminal to apply the changes.")
+        }
+    }
+}
+
+// File: list.swift | Path: /Users/maximlanskoy/SRM/Sources/SRM/CLI/list.swift
+//
+//  list.swift
+//  Swift Running Manager
+//
+//  Created by Maxim Lanskoy on 11.09.2024.
+//
+
+import ArgumentParser
+import Foundation
+import ShellOut
+
+extension SRM {
+    struct List: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "List all running processes.",
+            discussion: """
+            The `list` command displays all processes currently managed by SRM.
+
+            Example:
+              - List processes: `srm list`
+            """,
+            aliases: ["ls"]
+        )
+
+        func run() throws {
+            let processInfos = try ProcessManager.fetchAllProcessInfos()
+
+            if processInfos.isEmpty {
+                print("No running processes found.")
+                return
+            }
+
+            print(String(format: "%-20s %-8s %-8s %-8s %-20s", "Name", "PID", "CPU%", "MEM%", "Start Time"))
+            for processInfo in processInfos {
+                let pid = processInfo.processIdentifier
+                if isProcessRunning(pid: pid) {
+                    let cpuUsage = getCPUUsage(pid: pid)
+                    let memUsage = getMemoryUsage(pid: pid)
+                    let startTime = formatDate(processInfo.startTime)
+
+                    print(String(format: "%-20s %-8d %-8s %-8s %-20s", processInfo.processName, pid, cpuUsage, memUsage, startTime))
+                } else {
+                    // Process is not running, remove its info
+                    try? ProcessManager.removeProcessInfo(for: processInfo.processName)
+                }
+            }
+        }
+
+        func isProcessRunning(pid: Int32) -> Bool {
+            #if os(Windows)
+            // Windows-specific implementation
+            return false // Placeholder
+            #else
+            return kill(pid, 0) == 0
+            #endif
+        }
+
+        func getCPUUsage(pid: Int32) -> String {
+            #if os(Linux)
+            let command = "ps -p \(pid) -o %cpu --no-headers"
+            #elseif os(macOS)
+            let command = "ps -p \(pid) -o %cpu | tail -1"
+            #else
+            return "N/A"
+            #endif
+
+            do {
+                let output = try shellOut(to: command)
+                return output.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+            } catch {
+                return "N/A"
+            }
+        }
+
+        func getMemoryUsage(pid: Int32) -> String {
+            #if os(Linux)
+            let command = "ps -p \(pid) -o %mem --no-headers"
+            #elseif os(macOS)
+            let command = "ps -p \(pid) -o %mem | tail -1"
+            #else
+            return "N/A"
+            #endif
+
+            do {
+                let output = try shellOut(to: command)
+                return output.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+            } catch {
+                return "N/A"
+            }
+        }
+
+        func formatDate(_ date: Date) -> String {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+            return formatter.string(from: date)
+        }
+    }
+}
+
+// File: logs.swift | Path: /Users/maximlanskoy/SRM/Sources/SRM/CLI/logs.swift
+//
+//  logs.swift
+//  Swift Running Manager
+//
+//  Created by Maxim Lanskoy on 11.09.2024.
+//
+
+import ArgumentParser
+import Foundation
+
+extension SRM {
+    struct Logs: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "View logs of a process.",
+            discussion: """
+            The `logs` command displays the logs of a managed process.
+
+            Examples:
+              - View last 10 lines: `srm logs MyApp`
+              - View last 50 lines: `srm logs MyApp --lines 50`
+              - Tail logs in real-time: `srm logs MyApp --follow`
+            """
+        )
+
+        @Argument(help: "Name of the process to fetch logs for.")
+        var name: String
+
+        @Option(name: .shortAndLong, help: "Number of lines to display.")
+        var lines: Int = 10
+
+        @Flag(name: .shortAndLong, help: "Tail logs in real-time.")
+        var follow: Bool = false
+
+        func run() throws {
+            let logFilePath = ProcessManager.logsDirectory.appendingPathComponent("\(name).log").path
+
+            if FileManager.default.fileExists(atPath: logFilePath) {
+                if follow {
+                    tailLogFile(atPath: logFilePath)
+                } else {
+                    let logData = try String(contentsOfFile: logFilePath, encoding: .utf8)
+                    let logLines = logData.split(separator: "\n").suffix(lines)
+
+                    print("Last \(lines) lines of logs for \(name):")
+                    for line in logLines {
+                        print(line)
+                    }
+                }
+            } else {
+                print("No logs found for process: \(name)")
+            }
+        }
+
+        func tailLogFile(atPath path: String) {
+            guard let fileHandle = FileHandle(forReadingAtPath: path) else {
+                print("Unable to open log file.")
+                return
+            }
+
+            // Move to the end of the file
+            fileHandle.seekToEndOfFile()
+
+            print("Tailing logs for \(name). Press Ctrl+C to stop.")
+
+            // Observe the file for new data
+            let queue = DispatchQueue.global()
+            fileHandle.readabilityHandler = { handle in
+                let data = handle.availableData
+                if let logEntry = String(data: data, encoding: .utf8) {
+                    print(logEntry, terminator: "")
+                }
+            }
+
+            // Keep the run loop alive
+            RunLoop.current.run()
+        }
+    }
+}
+
+// File: minotor.swift | Path: /Users/maximlanskoy/SRM/Sources/SRM/CLI/minotor.swift
+//
+//  minotor.swift
+//  Swift Running Manager
+//
+//  Created by Maxim Lanskoy on 10.10.2024.
+//
+
+import ArgumentParser
+import Foundation
+import ShellOut
+
+extension SRM {
+    struct Monitor: ParsableCommand {
+        static let configuration = CommandConfiguration(abstract: "Start the SRM monitoring service")
+
+        func run() throws {
+            print("Starting SRM monitoring service...")
+
+            while true {
+                // Fetch all process info files
+                let processInfos = try ProcessManager.fetchAllProcessInfos()
+
+                for processInfo in processInfos {
+                    // Check if process is running
+                    let pid = processInfo.processIdentifier
+                    if !isProcessRunning(pid: pid) {
+                        if processInfo.restart {
+                            print("Process \(processInfo.processName) has stopped. Restarting...")
+                            // Restart the process
+                            try restartProcess(processInfo: processInfo)
+                        } else {
+                            // Remove process info as it is no longer running
+                            try ProcessManager.removeProcessInfo(for: processInfo.processName)
+                            print("Process \(processInfo.processName) has stopped and will not be restarted.")
+                        }
+                    }
+                }
+
+                // Sleep for 5 seconds before the next check
+                Thread.sleep(forTimeInterval: 5)
+            }
+        }
+
+        func isProcessRunning(pid: Int32) -> Bool {
+            return kill(pid, 0) == 0
+        }
+
+        func restartProcess(processInfo: CodableProcessInfo) throws {
+            let name = processInfo.processName
+            let executable = processInfo.executable
+            let logFilePath = processInfo.logFilePath
+
+            // Build the command to start the process with nohup and redirect output to log file
+            let command = "nohup \(executable) >> \(logFilePath) 2>&1 & echo $!"
+
+            // Run the command and capture the output (PID)
+            let output = try shellOut(to: command)
+            let pidString = output.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+            guard let pid = Int32(pidString) else {
+                throw RuntimeError("Failed to retrieve PID of the restarted process.")
+            }
+
+            // Update process info with new PID and start time
+            let updatedProcessInfo = CodableProcessInfo(
+                processName: name,
+                processIdentifier: pid,
+                startTime: Date(),
+                restart: processInfo.restart,
+                executable: executable,
+                logFilePath: logFilePath
+            )
+            try ProcessManager.saveProcessInfo(updatedProcessInfo)
+
+            print("Process \(name) restarted with PID: \(pid).")
+        }
+    }
+}
+
+// File: setup.swift | Path: /Users/maximlanskoy/SRM/Sources/SRM/CLI/setup.swift
+//
+//  setup.swift
+//  Swift Running Manager
+//
+//  Created by Maxim Lanskoy on 11.09.2024.
+//
+
+import ArgumentParser
+import Foundation
+
+extension SRM {
+    struct Setup: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Setup the SRM CLI globally.",
+            discussion: """
+            The `setup` command builds the SRM tool and adds it to your PATH.
+
+            - Detects your shell and updates the appropriate configuration file.
+            - Supports zsh, bash, and other common shells.
+            """
+        )
+
+        func run() throws {
+            // Step 1: Build the release version
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            process.arguments = ["swift", "build", "-c", "release"]
+
+            try process.run()
+            process.waitUntilExit()
+
+            let result = process.terminationStatus
+            if result != 0 {
+                throw RuntimeError("Build failed.")
+            }
+
+            // Step 2: Check if '.build/release' is in the user's PATH
+            let buildPath = "$(pwd)/.build/release"
+            let currentPath = ProcessInfo.processInfo.environment["PATH"] ?? ""
+
+            if !currentPath.contains(buildPath) {
+                print("Adding .build/release to PATH...")
+
+                // Detect shell configuration files
+                let shellConfigFiles = [".zshrc", ".bashrc", ".bash_profile", ".profile"]
+                var configFileFound = false
+
+                for fileName in shellConfigFiles {
+                    let configFile = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(fileName)
+                    if FileManager.default.fileExists(atPath: configFile.path) {
+                        // Add the .build/release path to the shell configuration file if not already present
+                        let exportLine = "export PATH=\"$PATH:\(buildPath)\""
+                        try appendToShellConfig(configFile: configFile, exportLine: exportLine)
+                        print("SRM setup completed successfully in \(configFile.path).")
+                        print("Please run `source \(configFile.path)` or restart your terminal to apply the changes.")
+                        configFileFound = true
+                        break
+                    }
+                }
+
+                if !configFileFound {
+                    print("No supported shell configuration file found. Please manually add .build/release to your PATH.")
+                }
+            } else {
+                print(".build/release is already in PATH.")
+            }
+        }
+
+        // Helper function to append to the shell config file only if the export line doesn't exist
+        func appendToShellConfig(configFile: URL, exportLine: String) throws {
+            let fileContent = (try? String(contentsOf: configFile)) ?? ""
+            if !fileContent.contains(exportLine) {
+                // Append export line only if it doesn't already exist
+                if FileManager.default.fileExists(atPath: configFile.path) {
+                    let fileHandle = try FileHandle(forWritingTo: configFile)
+                    fileHandle.seekToEndOfFile()
+                    if let data = ("\n" + exportLine + "\n").data(using: .utf8) {
+                        fileHandle.write(data)
+                    }
+                    fileHandle.closeFile()
+                } else {
+                    // If the config file doesn't exist, create it and add the line
+                    try exportLine.write(to: configFile, atomically: true, encoding: .utf8)
+                }
+            } else {
+                print("The PATH entry already exists in \(configFile.path). Skipping...")
+            }
+        }
+    }
+}
+
+// File: start.swift | Path: /Users/maximlanskoy/SRM/Sources/SRM/CLI/start.swift
+//
+//  start.swift
+//  Swift Running Manager
+//
+//  Created by Maxim Lanskoy on 11.09.2024.
+//
+
+import ArgumentParser
+import Foundation
+import ShellOut
+
+extension SRM {
+    struct Start: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Start a new process managed by SRM.",
+            discussion: """
+            The `start` command allows you to run any executable, script, or command as a managed process.
+
+            Examples:
+              - Start a Swift app: `srm start /path/to/app --name MyApp`
+              - Start a shell script: `srm start ./script.sh --name MyScript`
+              - Start a command: `srm start "python script.py" --name PythonScript`
+
+            Options:
+              - You can specify a custom name using `--name`.
+              - Use `--restart` to automatically restart the process if it crashes.
+            """
+        )
+
+        @Argument(help: "The script, command, or executable to run.")
+        var executable: String
+
+        @Option(name: .shortAndLong, help: "Specify a custom name for the process.")
+        var name: String?
+
+        @Flag(name: .shortAndLong, help: "Automatically restart the process if it exits unexpectedly.")
+        var restart: Bool = false
+
+        func run() throws {
+            let processName = name ?? URL(fileURLWithPath: executable).lastPathComponent
+            print("Starting process: \(processName)")
+
+            // Ensure logs directory exists
+            try FileManager.default.createDirectory(at: ProcessManager.logsDirectory, withIntermediateDirectories: true, attributes: nil)
+
+            let logFilePath = ProcessManager.logsDirectory.appendingPathComponent("\(processName).log").path
+
+            // Rotate log if it exceeds size limit (e.g., 5 MB)
+            let maxLogSize: UInt64 = 5 * 1024 * 1024 // 5 MB
+            if let attributes = try? FileManager.default.attributesOfItem(atPath: logFilePath),
+               let fileSize = attributes[FileAttributeKey.size] as? UInt64,
+               fileSize > maxLogSize {
+                // Move current log to archived log with timestamp
+                let dateFormatter = DateFormatter()
+                dateFormatter.dateFormat = "yyyyMMddHHmmss"
+                let timestamp = dateFormatter.string(from: Date())
+                let archivedLogPath = ProcessManager.logsDirectory.appendingPathComponent("\(processName)_\(timestamp).log")
+                try FileManager.default.moveItem(atPath: logFilePath, toPath: archivedLogPath.path)
+                print("Rotated log file to \(archivedLogPath.lastPathComponent)")
+            }
+
+            // Build the command to start the process with nohup and redirect output to log file
+            let command = "nohup \(executable) >> \(logFilePath) 2>&1 & echo $!"
+
+            // Run the command and capture the output (PID)
+            let output = try shellOut(to: command)
+            let pidString = output.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+            guard let pid = Int32(pidString) else {
+                throw RuntimeError("Failed to retrieve PID of the started process.")
+            }
+
+            // Save process info
+            let processInfo = CodableProcessInfo(
+                processName: processName,
+                processIdentifier: pid,
+                startTime: Date(),
+                restart: restart,
+                executable: executable,
+                logFilePath: logFilePath
+            )
+            try ProcessManager.saveProcessInfo(processInfo)
+
+            print("Process \(processName) started with PID: \(pid).")
+        }
+    }
+}
+
+// File: stop.swift | Path: /Users/maximlanskoy/SRM/Sources/SRM/CLI/stop.swift
+//
+//  stop.swift
+//  Swift Running Manager
+//
+//  Created by Maxim Lanskoy on 11.09.2024.
+//
+
+import ArgumentParser
+import Foundation
+import ShellOut
+
+extension SRM {
+    struct Stop: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Stop a running process managed by SRM.",
+            discussion: """
+            The `stop` command stops a running process by its name.
+
+            Example:
+              - Stop a process: `srm stop MyApp`
+            """
+        )
+
+        @Argument(help: "Name of the process to stop.")
+        var name: String
+
+        func run() throws {
+            print("Stopping process: \(name)")
+
+            do {
+                guard let processInfo = try ProcessManager.fetchProcessInfo(for: name) else {
+                    print("No process found with name: \(name)")
+                    return
+                }
+
+                let pid = processInfo.processIdentifier
+                if isProcessRunning(pid: pid) {
+                    #if os(Windows)
+                    // Windows-specific kill command
+                    let command = "taskkill /PID \(pid) /F"
+                    #else
+                    // Unix-like kill command
+                    let command = "kill \(pid)"
+                    #endif
+                    try shellOut(to: command)
+                    print("Process \(name) with PID \(pid) has been stopped.")
+                } else {
+                    print("Process \(name) is not running.")
+                }
+
+                // Remove process info after stopping
+                try ProcessManager.removeProcessInfo(for: name)
+            } catch {
+                print("An error occurred: \(error.localizedDescription)")
+            }
+        }
+
+        func isProcessRunning(pid: Int32) -> Bool {
+            #if os(Windows)
+            // Windows-specific implementation
+            // Placeholder: Implement process checking for Windows
+            return false
+            #else
+            return kill(pid, 0) == 0
+            #endif
+        }
+    }
+}
+
+// File: ProcessManager.swift | Path: /Users/maximlanskoy/SRM/Sources/SRM/Utils/ProcessManager.swift
+//
+//  ProcessManager.swift
+//  Swift Running Manager
+//
+//  Created by Maxim Lanskoy on 11.09.2024.
+//
+
+import Foundation
+
+struct CodableProcessInfo: Codable {
+    let processName: String
+    let processIdentifier: Int32
+    let startTime: Date
+    let restart: Bool
+    let executable: String
+    let logFilePath: String
+}
+
+struct ProcessManager {
+    static let logsDirectory = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".srm/logs")
+
+    static func saveProcessInfo(_ process: CodableProcessInfo) throws {
+        let data = try JSONEncoder().encode(process)
+        let filePath = logsDirectory.appendingPathComponent("\(process.processName).json")
+        try data.write(to: filePath)
+    }
+
+    static func fetchProcessInfo(for name: String) throws -> CodableProcessInfo? {
+        let filePath = logsDirectory.appendingPathComponent("\(name).json")
+        guard FileManager.default.fileExists(atPath: filePath.path) else {
+            return nil
+        }
+        let data = try Data(contentsOf: filePath)
+        return try JSONDecoder().decode(CodableProcessInfo.self, from: data)
+    }
+
+    static func removeProcessInfo(for name: String) throws {
+        let filePath = logsDirectory.appendingPathComponent("\(name).json")
+        if FileManager.default.fileExists(atPath: filePath.path) {
+            try FileManager.default.removeItem(at: filePath)
+        }
+    }
+
+    static func fetchAllProcessInfos() throws -> [CodableProcessInfo] {
+        let files = try FileManager.default.contentsOfDirectory(at: logsDirectory, includingPropertiesForKeys: nil)
+        let jsonFiles = files.filter { $0.pathExtension == "json" }
+        var processInfos: [CodableProcessInfo] = []
+
+        for file in jsonFiles {
+            let data = try Data(contentsOf: file)
+            if let processInfo = try? JSONDecoder().decode(CodableProcessInfo.self, from: data) {
+                processInfos.append(processInfo)
+            }
+        }
+        return processInfos
+    }
+}
+
+// File: main.swift | Path: /Users/maximlanskoy/SRM/Sources/SRM/main.swift
+//
+//  main.swift
+//  Swift Running Manager
+//
+//  Created by Maxim Lanskoy on 11.09.2024.
+//
+
+import ArgumentParser
+import Foundation
+
+// Define RuntimeError type
+struct RuntimeError: Error, CustomStringConvertible {
+    var description: String
+
+    init(_ description: String) {
+        self.description = description
+    }
+}
+
+// Define SRM structure without the @main attribute
+struct SRM: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        abstract: "Swift Running Manager (SRM)",
+        subcommands: [
+            Start.self,
+            Stop.self,
+            List.self,
+            Logs.self,
+            Monitor.self,
+            Setup.self,
+            Destroy.self,
+            HelpCommand.self
+        ],
+        defaultSubcommand: HelpCommand.self
+    )
+
+    struct HelpCommand: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            commandName: "help",
+            abstract: "Display help information"
+        )
+
+        func run() throws {
+            print("""
+            SRM - Swift Running Manager
+            Usage: srm <command> [options]
+
+            Commands:
+                start     Start a process
+                stop      Stop a process
+                list (ls) List all running processes
+                logs      View logs of a process
+                monitor   Start the monitoring service
+                setup     Setup SRM
+                destroy   Remove SRM setup
+                help      Display this help information
+
+            Use 'srm <command> --help' for more information on a command.
+            """)
+        }
+    }
+}
+
+SRM.main()

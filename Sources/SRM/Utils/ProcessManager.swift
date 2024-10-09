@@ -1,64 +1,57 @@
+//
+//  ProcessManager.swift
+//  Swift Running Manager
+//
+//  Created by Maxim Lanskoy on 11.09.2024.
+//
+
 import Foundation
 
-public extension ProcessInfo {
-    struct CodableProcessInfo: Codable {
-        let environment: [String: String]
-        let arguments: [String]
-        let hostName: String
-        let processName: String
-        let processIdentifier: Int32
-        let operatingSystemVersionString: String
-        let processorCount: Int
-        let physicalMemory: UInt64
-        let systemUptime: TimeInterval
-    }
-    
-    // A method to convert ProcessInfo into a Codable struct
-    func codableRepresentation() -> CodableProcessInfo {
-        return CodableProcessInfo(
-            environment: self.environment,
-            arguments: self.arguments,
-            hostName: self.hostName,
-            processName: self.processName,
-            processIdentifier: self.processIdentifier,
-            operatingSystemVersionString: self.operatingSystemVersionString,
-            processorCount: self.processorCount,
-            physicalMemory: self.physicalMemory,
-            systemUptime: self.systemUptime
-        )
-    }
-    
-    // A method to encode the ProcessInfo
-    func encodeToJSON() -> Data? {
-        let codableProcessInfo = self.codableRepresentation()
-        let encoder = JSONEncoder()
-        return try? encoder.encode(codableProcessInfo)
-    }
-    
-    // A method to decode from JSON to ProcessInfo (returns ProcessInfo-like struct)
-    static func decodeFromJSON(_ data: Data) -> CodableProcessInfo? {
-        let decoder = JSONDecoder()
-        return try? decoder.decode(CodableProcessInfo.self, from: data)
-    }
+struct CodableProcessInfo: Codable {
+    let processName: String
+    let processIdentifier: Int32
+    let startTime: Date
+    let restart: Bool
+    let executable: String
+    let logFilePath: String
 }
 
 struct ProcessManager {
     static let logsDirectory = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".srm/logs")
 
-    static func saveProcessInfo(_ process: ProcessInfo.CodableProcessInfo) throws {
+    static func saveProcessInfo(_ process: CodableProcessInfo) throws {
         let data = try JSONEncoder().encode(process)
         let filePath = logsDirectory.appendingPathComponent("\(process.processName).json")
         try data.write(to: filePath)
     }
 
-    static func fetchProcessInfo(for name: String) throws -> ProcessInfo.CodableProcessInfo? {
+    static func fetchProcessInfo(for name: String) throws -> CodableProcessInfo? {
         let filePath = logsDirectory.appendingPathComponent("\(name).json")
+        guard FileManager.default.fileExists(atPath: filePath.path) else {
+            return nil
+        }
         let data = try Data(contentsOf: filePath)
-        return try JSONDecoder().decode(ProcessInfo.CodableProcessInfo.self, from: data)
+        return try JSONDecoder().decode(CodableProcessInfo.self, from: data)
     }
 
     static func removeProcessInfo(for name: String) throws {
         let filePath = logsDirectory.appendingPathComponent("\(name).json")
-        try FileManager.default.removeItem(at: filePath)
+        if FileManager.default.fileExists(atPath: filePath.path) {
+            try FileManager.default.removeItem(at: filePath)
+        }
+    }
+
+    static func fetchAllProcessInfos() throws -> [CodableProcessInfo] {
+        let files = try FileManager.default.contentsOfDirectory(at: logsDirectory, includingPropertiesForKeys: nil)
+        let jsonFiles = files.filter { $0.pathExtension == "json" }
+        var processInfos: [CodableProcessInfo] = []
+
+        for file in jsonFiles {
+            let data = try Data(contentsOf: file)
+            if let processInfo = try? JSONDecoder().decode(CodableProcessInfo.self, from: data) {
+                processInfos.append(processInfo)
+            }
+        }
+        return processInfos
     }
 }
