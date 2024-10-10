@@ -1,4 +1,4 @@
-# 🚀 SRM - Swift Running Manager
+# 🚀 SRM - Swift Running Manager   [![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2FMaxim-Lanskoy%2FSRM%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/Maxim-Lanskoy/SRM)   [![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2FMaxim-Lanskoy%2FSRM%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/Maxim-Lanskoy/SRM)
 
 SRM is a lightweight, Swift-based command-line tool designed to help you manage, monitor, and control various processes, including Swift applications, shell scripts, binaries, and commands. Inspired by [PM2](https://pm2.keymetrics.io), it provides an intuitive interface for starting, stopping, monitoring processes, and viewing real-time logs.
 
