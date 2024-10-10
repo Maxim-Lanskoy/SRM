@@ -5,7 +5,6 @@ SRM is a lightweight, Swift-based command-line tool designed to help you manage,
 ## ✨ Features
 
 - 🚦 **Process Management**: Start, stop, restart, and delete processes like commands, binaries, or Swift applications.
-- 🛑 **Stop and Delete All Processes**: Easily stop or delete all managed processes with a single command.
 - 📊 **Monitoring**: List all processes with real-time tracking, including CPU and memory usage.
 - 📜 **Logging**: Automatically store and fetch logs for each process, with real-time log tailing by default.
 - ❗ **Process Statuses**: Processes retain their status (`running`, `stopped`, `error`), even if they fail to start.
@@ -13,6 +12,7 @@ SRM is a lightweight, Swift-based command-line tool designed to help you manage,
 - 🔄 **Log Rotation**: Prevent log files from becoming too large with automatic log rotation.
 - 🎯 **Flexibility**: Run shell commands, executables, or scripts seamlessly.
 - 🖥 **Cross-Platform**: Compatible with macOS and Linux systems, supporting both `bash` and `zsh` shells.
+- 🚀 **Automatic Monitoring**: SRM supports an automatic monitoring service that runs at system startup, ensuring all previously running processes are restored.
 
 ## 📋 Prerequisites
 
@@ -55,25 +55,7 @@ For distributions such as Arch or others, please follow the official Swift [inst
    swift run srm setup
    ```
 
-   This command builds SRM and adds it to your `$PATH`, making it accessible from anywhere in your terminal.
-
-3. **Source Your Shell:**
-
-   Depending on your shell and operating system, run:
-
-   - For **macOS (ZSH)** users:
-
-     ```bash
-     source ~/.zshrc
-     ```
-
-   - For **Linux (Bash)** users:
-
-     ```bash
-     source ~/.bashrc
-     ```
-
-   - For **Other shells**: Restart your terminal session to apply the changes.
+   This command builds SRM, adds it to your `$PATH`, and sets up the monitoring service to start with the system.
 
 ## 🏃 Usage
 
@@ -235,13 +217,9 @@ srm ls
 
 #### 7. Monitoring Processes:
 
-Start the SRM monitoring service to automatically restart processes if they crash (required if using the `--restart` flag):
+The SRM monitoring service automatically starts with the system, restoring any processes that were previously running. It also tracks the status of all processes and attempts to restart those marked with `--restart`, up to a maximum of 15 restart attempts.
 
-```bash
-srm monitor
-```
-
-**Note:** The background monitoring feature will be implemented in a future release. For now, you need to keep the terminal window open while running the monitor service.
+**Note:** The `srm monitor` command is now intended to run automatically at system startup only and should not be called manually.
 
 ## 🔄 Running SRM Setup Again
 
@@ -250,6 +228,8 @@ If, for any reason, SRM is no longer available in your `$PATH`, or you want to r
 ```bash
 srm setup
 ```
+
+This command will also re-register the monitoring service.
 
 ## 🔥 Destroying SRM
 
@@ -298,6 +278,6 @@ SRM is compatible with:
 - **Process Statuses**: SRM keeps track of each process's status (`running`, `stopped`, `error`), allowing you to monitor and debug processes effectively.
 - **Viewing Logs for Failed Processes**: You can view logs for processes that failed to start to help debug issues.
 - **Log Rotation**: SRM automatically rotates logs when they exceed 5 MB to prevent log files from becoming too large.
-- **Auto-Restart**: Use the `--restart` flag when starting a process to have SRM automatically restart it if it crashes. Ensure the monitoring service is running with `srm monitor`.
+- **Auto-Restart**: Use the `--restart` flag when starting a process to have SRM automatically restart it if it crashes. The monitoring service runs automatically to facilitate this feature.
 - **Process Indexing**: Use the index number from `srm list` to refer to processes in commands.
 - **Aliases**: Use `srm ls` as a shortcut for `srm list`.
