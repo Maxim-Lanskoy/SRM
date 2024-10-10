@@ -514,7 +514,13 @@ extension SRM {
         private var pidFilePath = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".srm/monitor.pid")
 
         func run() throws {
-            // Step 1: Check if the monitor is already running
+            // Step 1: Prevent manual execution by checking the environment variable
+            guard ProcessInfo.processInfo.environment["SRM_AUTOMATIC_RUN"] == "true" else {
+                print("The 'srm monitor' command is intended to run automatically at startup only and should not be called manually.")
+                return
+            }
+
+            // Step 2: Check if the monitor is already running
             if let existingPID = try? String(contentsOf: pidFilePath, encoding: .utf8),
                let pid = Int32(existingPID),
                isProcessRunning(pid: pid) {
@@ -522,11 +528,11 @@ extension SRM {
                 return
             }
 
-            // Step 2: Write the current process's PID to the PID file
+            // Step 3: Write the current process's PID to the PID file
             let currentPID = ProcessInfo.processInfo.processIdentifier
             try "\(currentPID)".write(to: pidFilePath, atomically: true, encoding: .utf8)
 
-            // Step 3: Start the monitoring loop
+            // Step 4: Start the monitoring loop
             print("Starting SRM monitoring service with PID: \(currentPID)...")
 
             while true {
@@ -534,17 +540,14 @@ extension SRM {
 
                 for var processInfo in processInfos {
                     if processInfo.status == "error" || processInfo.status == "stopped" {
-                        // Skip processes that are in error or stopped state
                         continue
                     }
 
                     if let pid = processInfo.processIdentifier, !isProcessRunning(pid: pid) {
                         if processInfo.restart {
                             print("Process \(processInfo.processName) has stopped. Restarting...")
-                            // Restart the process
                             try restartProcess(processInfo: &processInfo)
                         } else {
-                            // Update process info to set status to "stopped" and remove pid and startTime
                             processInfo.status = "stopped"
                             processInfo.processIdentifier = nil
                             processInfo.startTime = nil
@@ -554,7 +557,6 @@ extension SRM {
                     }
                 }
 
-                // Sleep for 5 seconds before the next check
                 Thread.sleep(forTimeInterval: 5)
             }
         }
@@ -564,20 +566,17 @@ extension SRM {
             let executable = processInfo.executable
             let logFilePath = processInfo.logFilePath
 
-            // Build the command to start the process with nohup and redirect output to log file
             let command = """
             nohup stdbuf -oL \(executable) > \(logFilePath) 2>&1 & echo $! && disown
             """
 
             do {
-                // Run the command and capture the output (PID)
                 let output = try shellOut(to: command)
                 let pidString = output.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
                 guard let pid = Int32(pidString) else {
                     throw RuntimeError("Failed to retrieve PID of the restarted process.")
                 }
 
-                // Update process info with new PID, start time, and status
                 processInfo.processIdentifier = pid
                 processInfo.startTime = Date()
                 processInfo.status = "running"
@@ -586,7 +585,6 @@ extension SRM {
                 print("Process \(name) restarted with PID: \(pid).")
             } catch {
                 print("Failed to restart process \(name): \(error)")
-                // Update process info status to "error"
                 processInfo.status = "error"
                 processInfo.processIdentifier = nil
                 processInfo.startTime = nil
@@ -750,26 +748,26 @@ extension SRM {
                 throw RuntimeError("Build failed.")
             }
 
-            // Step 2: Set up the PATH for SRM in the shell configuration file
-            let buildPath = "$(pwd)/.build/release"
-            let exportLine = "export PATH=\"$PATH:\(buildPath)\""
+            // Step 2: Get the absolute path of the built SRM binary
+            let buildPath = FileManager.default.currentDirectoryPath + "/.build/release"
+            let exportLine = "# Swift Running Manager path:\nexport PATH=\"$PATH:\(buildPath)\""
 
+            // Step 3: Set up the PATH for SRM in the shell configuration file
             let shellConfigFiles = [".zshrc", ".bashrc", ".bash_profile", ".profile"]
+            var updatedConfigFilePath: URL? = nil
+
             for fileName in shellConfigFiles {
                 let configFile = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(fileName)
                 if FileManager.default.fileExists(atPath: configFile.path) {
                     var fileContents = try String(contentsOf: configFile, encoding: .utf8)
+
+                    // Check if the export line already exists
                     if !fileContents.contains(exportLine) {
                         // Append the export line if not already present
-                        if let fileHandle = try? FileHandle(forWritingTo: configFile) {
-                            fileHandle.seekToEndOfFile()
-                            if let data = ("\n" + exportLine + "\n").data(using: .utf8) {
-                                fileHandle.write(data)
-                                print("SRM setup completed successfully in \(configFile.path).")
-                                print("Please run `source \(configFile.path)` or restart your terminal to apply the changes.")
-                            }
-                            fileHandle.closeFile()
-                        }
+                        fileContents += "\n" + exportLine + "\n"
+                        try fileContents.write(to: configFile, atomically: true, encoding: .utf8)
+                        updatedConfigFilePath = configFile
+                        print("SRM setup completed successfully in \(configFile.path).")
                     } else {
                         print("The PATH entry already exists in \(configFile.path). Skipping...")
                     }
@@ -777,12 +775,30 @@ extension SRM {
                 }
             }
 
-            // Step 3: Register monitoring service
+            // Step 4: Register monitoring service
             #if os(macOS)
             try setupLaunchdService()
             #elseif os(Linux)
             try setupSystemdService()
             #endif
+
+            // Step 5: Source the shell configuration file to apply changes
+            if let configFilePath = updatedConfigFilePath {
+                try shellOut(to: "source \(configFilePath.path)")
+                print("Applied changes to the current shell environment.")
+            }
+
+            // Automatically start the monitoring service in the background
+            print("Starting SRM monitor service in the background...")
+            let monitorProcess = Process()
+            monitorProcess.executableURL = URL(fileURLWithPath: "/bin/sh")
+            monitorProcess.arguments = ["-c", "nohup srm monitor > ~/.srm/monitor.log 2>&1 &"]
+            monitorProcess.environment = ["SRM_AUTOMATIC_RUN": "true"]
+
+            try monitorProcess.run()
+            monitorProcess.waitUntilExit()
+
+            print("SRM monitoring service has been started in the background.")
         }
 
         // macOS-specific launchd setup
@@ -807,10 +823,20 @@ extension SRM {
             </dict>
             </plist>
             """
+            
+            // Write plist content
             try plistContent.write(to: plistPath, atomically: true, encoding: .utf8)
-            try shellOut(to: "launchctl", arguments: ["unload", plistPath.path])
+            
+            // Check if the service is already loaded
+            let loadStatus = try? shellOut(to: "launchctl", arguments: ["list", "com.srm.monitor"])
+            if loadStatus != nil {
+                print("SRM monitoring service already exists. Unloading to apply updates...")
+                try shellOut(to: "launchctl", arguments: ["unload", plistPath.path])
+            }
+            
+            // Load the new service
             try shellOut(to: "launchctl", arguments: ["load", plistPath.path])
-            print("SRM monitoring service has been set up with launchd.")
+            print("SRM monitoring service has been loaded with launchd.")
         }
 
         // Linux-specific systemd setup
@@ -829,10 +855,25 @@ extension SRM {
             [Install]
             WantedBy=multi-user.target
             """
+            
+            // Write systemd service content
             try serviceContent.write(toFile: servicePath, atomically: true, encoding: .utf8)
+            
+            // Reload systemd to reflect changes
+            print("Reloading systemd daemon...")
             try shellOut(to: "systemctl", arguments: ["daemon-reload"])
-            try shellOut(to: "systemctl", arguments: ["enable", "srm-monitor"])
-            try shellOut(to: "systemctl", arguments: ["restart", "srm-monitor"])
+
+            // Check if the service is already enabled
+            let serviceStatus = try? shellOut(to: "systemctl", arguments: ["is-active", "srm-monitor"])
+            if serviceStatus == "active" {
+                print("SRM monitoring service is currently running. Restarting to apply updates...")
+                try shellOut(to: "systemctl", arguments: ["restart", "srm-monitor"])
+            } else {
+                print("Enabling SRM monitoring service...")
+                try shellOut(to: "systemctl", arguments: ["enable", "srm-monitor"])
+                try shellOut(to: "systemctl", arguments: ["start", "srm-monitor"])
+            }
+            
             print("SRM monitoring service has been set up with systemd.")
         }
     }

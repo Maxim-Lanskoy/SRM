@@ -39,6 +39,10 @@ extension SRM {
             // Step 4: Start the monitoring loop
             print("Starting SRM monitoring service with PID: \(currentPID)...")
 
+            // Step 5: Restart processes that were previously running
+            try restartPreviouslyRunningProcesses()
+
+            // Step 6: Monitor the processes
             while true {
                 let processInfos = try ProcessManager.fetchAllProcessInfos()
 
@@ -65,7 +69,18 @@ extension SRM {
             }
         }
 
-        func restartProcess(processInfo: inout CodableProcessInfo) throws {
+        private func restartPreviouslyRunningProcesses() throws {
+            let processInfos = try ProcessManager.fetchAllProcessInfos()
+
+            for var processInfo in processInfos {
+                if processInfo.status == "running" {
+                    print("Restarting process \(processInfo.processName) that was previously running...")
+                    try restartProcess(processInfo: &processInfo)
+                }
+            }
+        }
+
+        private func restartProcess(processInfo: inout CodableProcessInfo) throws {
             let name = processInfo.processName
             let executable = processInfo.executable
             let logFilePath = processInfo.logFilePath
@@ -96,7 +111,7 @@ extension SRM {
             }
         }
 
-        func isProcessRunning(pid: Int32) -> Bool {
+        private func isProcessRunning(pid: Int32) -> Bool {
             return kill(pid, 0) == 0
         }
     }
