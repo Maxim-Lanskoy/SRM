@@ -7,6 +7,7 @@
 
 import ArgumentParser
 import Foundation
+import ShellOut
 
 extension SRM {
     struct Setup: ParsableCommand {
@@ -34,57 +35,133 @@ extension SRM {
                 throw RuntimeError("Build failed.")
             }
 
-            // Step 2: Check if '.build/release' is in the user's PATH
-            let buildPath = "$(pwd)/.build/release"
-            let currentPath = ProcessInfo.processInfo.environment["PATH"] ?? ""
+            // Step 2: Get the absolute path of the built SRM binary
+            let buildPath = FileManager.default.currentDirectoryPath + "/.build/release"
+            let exportLine = "# Swift Running Manager path:\nexport PATH=\"$PATH:\(buildPath)\""
 
-            if !currentPath.contains(buildPath) {
-                print("Adding .build/release to PATH...")
+            // Step 3: Set up the PATH for SRM in the shell configuration file
+            let shellConfigFiles = [".zshrc", ".bashrc", ".bash_profile", ".profile"]
+            var updatedConfigFilePath: URL? = nil
 
-                // Detect shell configuration files
-                let shellConfigFiles = [".zshrc", ".bashrc", ".bash_profile", ".profile"]
-                var configFileFound = false
+            for fileName in shellConfigFiles {
+                let configFile = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(fileName)
+                if FileManager.default.fileExists(atPath: configFile.path) {
+                    var fileContents = try String(contentsOf: configFile, encoding: .utf8)
 
-                for fileName in shellConfigFiles {
-                    let configFile = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(fileName)
-                    if FileManager.default.fileExists(atPath: configFile.path) {
-                        // Add the .build/release path to the shell configuration file if not already present
-                        let exportLine = "export PATH=\"$PATH:\(buildPath)\""
-                        try appendToShellConfig(configFile: configFile, exportLine: exportLine)
+                    // Check if the export line already exists
+                    if !fileContents.contains(exportLine) {
+                        // Append the export line if not already present
+                        fileContents += "\n" + exportLine + "\n"
+                        try fileContents.write(to: configFile, atomically: true, encoding: .utf8)
+                        updatedConfigFilePath = configFile
                         print("SRM setup completed successfully in \(configFile.path).")
-                        print("Please run `source \(configFile.path)` or restart your terminal to apply the changes.")
-                        configFileFound = true
-                        break
+                    } else {
+                        print("The PATH entry already exists in \(configFile.path). Skipping...")
                     }
+                    break
                 }
-
-                if !configFileFound {
-                    print("No supported shell configuration file found. Please manually add .build/release to your PATH.")
-                }
-            } else {
-                print(".build/release is already in PATH.")
             }
+
+            // Step 4: Register monitoring service
+            #if os(macOS)
+            try setupLaunchdService()
+            #elseif os(Linux)
+            try setupSystemdService()
+            #endif
+
+            // Step 5: Source the shell configuration file to apply changes
+            if let configFilePath = updatedConfigFilePath {
+                try shellOut(to: "source \(configFilePath.path)")
+                print("Applied changes to the current shell environment.")
+            }
+
+            // Automatically start the monitoring service in the background
+            print("Starting SRM monitor service in the background...")
+            let monitorProcess = Process()
+            monitorProcess.executableURL = URL(fileURLWithPath: "/bin/sh")
+            monitorProcess.arguments = ["-c", "nohup srm monitor > ~/.srm/monitor.log 2>&1 &"]
+            monitorProcess.environment = ["SRM_AUTOMATIC_RUN": "true"]
+
+            try monitorProcess.run()
+            monitorProcess.waitUntilExit()
+
+            print("SRM monitoring service has been started in the background.")
         }
 
-        // Helper function to append to the shell config file only if the export line doesn't exist
-        func appendToShellConfig(configFile: URL, exportLine: String) throws {
-            let fileContent = (try? String(contentsOf: configFile)) ?? ""
-            if !fileContent.contains(exportLine) {
-                // Append export line only if it doesn't already exist
-                if FileManager.default.fileExists(atPath: configFile.path) {
-                    let fileHandle = try FileHandle(forWritingTo: configFile)
-                    fileHandle.seekToEndOfFile()
-                    if let data = ("\n" + exportLine + "\n").data(using: .utf8) {
-                        fileHandle.write(data)
-                    }
-                    fileHandle.closeFile()
-                } else {
-                    // If the config file doesn't exist, create it and add the line
-                    try exportLine.write(to: configFile, atomically: true, encoding: .utf8)
-                }
-            } else {
-                print("The PATH entry already exists in \(configFile.path). Skipping...")
+        // macOS-specific launchd setup
+        func setupLaunchdService() throws {
+            let plistPath = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/LaunchAgents/com.srm.monitor.plist")
+            let plistContent = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            <plist version="1.0">
+            <dict>
+                <key>Label</key>
+                <string>com.srm.monitor</string>
+                <key>ProgramArguments</key>
+                <array>
+                    <string>/usr/local/bin/srm</string>
+                    <string>monitor</string>
+                </array>
+                <key>RunAtLoad</key>
+                <true/>
+                <key>KeepAlive</key>
+                <true/>
+            </dict>
+            </plist>
+            """
+            
+            // Write plist content
+            try plistContent.write(to: plistPath, atomically: true, encoding: .utf8)
+            
+            // Check if the service is already loaded
+            let loadStatus = try? shellOut(to: "launchctl", arguments: ["list", "com.srm.monitor"])
+            if loadStatus != nil {
+                print("SRM monitoring service already exists. Unloading to apply updates...")
+                try shellOut(to: "launchctl", arguments: ["unload", plistPath.path])
             }
+            
+            // Load the new service
+            try shellOut(to: "launchctl", arguments: ["load", plistPath.path])
+            print("SRM monitoring service has been loaded with launchd.")
+        }
+
+        // Linux-specific systemd setup
+        func setupSystemdService() throws {
+            let servicePath = "/etc/systemd/system/srm-monitor.service"
+            let serviceContent = """
+            [Unit]
+            Description=SRM Monitoring Service
+            After=network.target
+
+            [Service]
+            ExecStart=/usr/local/bin/srm monitor
+            Restart=always
+            RestartSec=5
+
+            [Install]
+            WantedBy=multi-user.target
+            """
+            
+            // Write systemd service content
+            try serviceContent.write(toFile: servicePath, atomically: true, encoding: .utf8)
+            
+            // Reload systemd to reflect changes
+            print("Reloading systemd daemon...")
+            try shellOut(to: "systemctl", arguments: ["daemon-reload"])
+
+            // Check if the service is already enabled
+            let serviceStatus = try? shellOut(to: "systemctl", arguments: ["is-active", "srm-monitor"])
+            if serviceStatus == "active" {
+                print("SRM monitoring service is currently running. Restarting to apply updates...")
+                try shellOut(to: "systemctl", arguments: ["restart", "srm-monitor"])
+            } else {
+                print("Enabling SRM monitoring service...")
+                try shellOut(to: "systemctl", arguments: ["enable", "srm-monitor"])
+                try shellOut(to: "systemctl", arguments: ["start", "srm-monitor"])
+            }
+            
+            print("SRM monitoring service has been set up with systemd.")
         }
     }
 }

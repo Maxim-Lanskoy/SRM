@@ -69,6 +69,7 @@ srm list
 Conclusion:
 
 SRM aims to be a simple yet powerful tool for process management in the development and deployment of applications. By providing essential features similar to pm2, it helps users manage processes effectively without the overhead of larger process management systems.
+
 Project File Structure:
 📁 Sources
     📁 SRM
@@ -506,21 +507,37 @@ import ShellOut
 
 extension SRM {
     struct Monitor: ParsableCommand {
-        static let configuration = CommandConfiguration(abstract: "Start the SRM monitoring service")
+        static let configuration = CommandConfiguration(
+            abstract: "Start the SRM monitoring service (intended to run at system startup only)."
+        )
+
+        private var pidFilePath = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".srm/monitor.pid")
 
         func run() throws {
-            print("Starting SRM monitoring service...")
-            
+            // Step 1: Check if the monitor is already running
+            if let existingPID = try? String(contentsOf: pidFilePath, encoding: .utf8),
+               let pid = Int32(existingPID),
+               isProcessRunning(pid: pid) {
+                print("SRM monitor is already running with PID: \(pid). Exiting to prevent multiple instances.")
+                return
+            }
+
+            // Step 2: Write the current process's PID to the PID file
+            let currentPID = ProcessInfo.processInfo.processIdentifier
+            try "\(currentPID)".write(to: pidFilePath, atomically: true, encoding: .utf8)
+
+            // Step 3: Start the monitoring loop
+            print("Starting SRM monitoring service with PID: \(currentPID)...")
+
             while true {
-                // Fetch all process info files
                 let processInfos = try ProcessManager.fetchAllProcessInfos()
-                
+
                 for var processInfo in processInfos {
                     if processInfo.status == "error" || processInfo.status == "stopped" {
                         // Skip processes that are in error or stopped state
                         continue
                     }
-                    
+
                     if let pid = processInfo.processIdentifier, !isProcessRunning(pid: pid) {
                         if processInfo.restart {
                             print("Process \(processInfo.processName) has stopped. Restarting...")
@@ -536,20 +553,22 @@ extension SRM {
                         }
                     }
                 }
-                
+
                 // Sleep for 5 seconds before the next check
                 Thread.sleep(forTimeInterval: 5)
             }
         }
-        
+
         func restartProcess(processInfo: inout CodableProcessInfo) throws {
             let name = processInfo.processName
             let executable = processInfo.executable
             let logFilePath = processInfo.logFilePath
-            
+
             // Build the command to start the process with nohup and redirect output to log file
-            let command = "nohup \(executable) >> \(logFilePath) 2>&1 & echo $!"
-            
+            let command = """
+            nohup stdbuf -oL \(executable) > \(logFilePath) 2>&1 & echo $! && disown
+            """
+
             do {
                 // Run the command and capture the output (PID)
                 let output = try shellOut(to: command)
@@ -557,13 +576,13 @@ extension SRM {
                 guard let pid = Int32(pidString) else {
                     throw RuntimeError("Failed to retrieve PID of the restarted process.")
                 }
-                
+
                 // Update process info with new PID, start time, and status
                 processInfo.processIdentifier = pid
                 processInfo.startTime = Date()
                 processInfo.status = "running"
                 try ProcessManager.saveProcessInfo(processInfo)
-                
+
                 print("Process \(name) restarted with PID: \(pid).")
             } catch {
                 print("Failed to restart process \(name): \(error)")
@@ -703,6 +722,7 @@ extension SRM {
 
 import ArgumentParser
 import Foundation
+import ShellOut
 
 extension SRM {
     struct Setup: ParsableCommand {
@@ -730,57 +750,90 @@ extension SRM {
                 throw RuntimeError("Build failed.")
             }
 
-            // Step 2: Check if '.build/release' is in the user's PATH
+            // Step 2: Set up the PATH for SRM in the shell configuration file
             let buildPath = "$(pwd)/.build/release"
-            let currentPath = ProcessInfo.processInfo.environment["PATH"] ?? ""
+            let exportLine = "export PATH=\"$PATH:\(buildPath)\""
 
-            if !currentPath.contains(buildPath) {
-                print("Adding .build/release to PATH...")
-
-                // Detect shell configuration files
-                let shellConfigFiles = [".zshrc", ".bashrc", ".bash_profile", ".profile"]
-                var configFileFound = false
-
-                for fileName in shellConfigFiles {
-                    let configFile = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(fileName)
-                    if FileManager.default.fileExists(atPath: configFile.path) {
-                        // Add the .build/release path to the shell configuration file if not already present
-                        let exportLine = "export PATH=\"$PATH:\(buildPath)\""
-                        try appendToShellConfig(configFile: configFile, exportLine: exportLine)
-                        print("SRM setup completed successfully in \(configFile.path).")
-                        print("Please run `source \(configFile.path)` or restart your terminal to apply the changes.")
-                        configFileFound = true
-                        break
+            let shellConfigFiles = [".zshrc", ".bashrc", ".bash_profile", ".profile"]
+            for fileName in shellConfigFiles {
+                let configFile = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(fileName)
+                if FileManager.default.fileExists(atPath: configFile.path) {
+                    var fileContents = try String(contentsOf: configFile, encoding: .utf8)
+                    if !fileContents.contains(exportLine) {
+                        // Append the export line if not already present
+                        if let fileHandle = try? FileHandle(forWritingTo: configFile) {
+                            fileHandle.seekToEndOfFile()
+                            if let data = ("\n" + exportLine + "\n").data(using: .utf8) {
+                                fileHandle.write(data)
+                                print("SRM setup completed successfully in \(configFile.path).")
+                                print("Please run `source \(configFile.path)` or restart your terminal to apply the changes.")
+                            }
+                            fileHandle.closeFile()
+                        }
+                    } else {
+                        print("The PATH entry already exists in \(configFile.path). Skipping...")
                     }
+                    break
                 }
-
-                if !configFileFound {
-                    print("No supported shell configuration file found. Please manually add .build/release to your PATH.")
-                }
-            } else {
-                print(".build/release is already in PATH.")
             }
+
+            // Step 3: Register monitoring service
+            #if os(macOS)
+            try setupLaunchdService()
+            #elseif os(Linux)
+            try setupSystemdService()
+            #endif
         }
 
-        // Helper function to append to the shell config file only if the export line doesn't exist
-        func appendToShellConfig(configFile: URL, exportLine: String) throws {
-            let fileContent = (try? String(contentsOf: configFile)) ?? ""
-            if !fileContent.contains(exportLine) {
-                // Append export line only if it doesn't already exist
-                if FileManager.default.fileExists(atPath: configFile.path) {
-                    let fileHandle = try FileHandle(forWritingTo: configFile)
-                    fileHandle.seekToEndOfFile()
-                    if let data = ("\n" + exportLine + "\n").data(using: .utf8) {
-                        fileHandle.write(data)
-                    }
-                    fileHandle.closeFile()
-                } else {
-                    // If the config file doesn't exist, create it and add the line
-                    try exportLine.write(to: configFile, atomically: true, encoding: .utf8)
-                }
-            } else {
-                print("The PATH entry already exists in \(configFile.path). Skipping...")
-            }
+        // macOS-specific launchd setup
+        func setupLaunchdService() throws {
+            let plistPath = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/LaunchAgents/com.srm.monitor.plist")
+            let plistContent = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            <plist version="1.0">
+            <dict>
+                <key>Label</key>
+                <string>com.srm.monitor</string>
+                <key>ProgramArguments</key>
+                <array>
+                    <string>/usr/local/bin/srm</string>
+                    <string>monitor</string>
+                </array>
+                <key>RunAtLoad</key>
+                <true/>
+                <key>KeepAlive</key>
+                <true/>
+            </dict>
+            </plist>
+            """
+            try plistContent.write(to: plistPath, atomically: true, encoding: .utf8)
+            try shellOut(to: "launchctl", arguments: ["unload", plistPath.path])
+            try shellOut(to: "launchctl", arguments: ["load", plistPath.path])
+            print("SRM monitoring service has been set up with launchd.")
+        }
+
+        // Linux-specific systemd setup
+        func setupSystemdService() throws {
+            let servicePath = "/etc/systemd/system/srm-monitor.service"
+            let serviceContent = """
+            [Unit]
+            Description=SRM Monitoring Service
+            After=network.target
+
+            [Service]
+            ExecStart=/usr/local/bin/srm monitor
+            Restart=always
+            RestartSec=5
+
+            [Install]
+            WantedBy=multi-user.target
+            """
+            try serviceContent.write(toFile: servicePath, atomically: true, encoding: .utf8)
+            try shellOut(to: "systemctl", arguments: ["daemon-reload"])
+            try shellOut(to: "systemctl", arguments: ["enable", "srm-monitor"])
+            try shellOut(to: "systemctl", arguments: ["restart", "srm-monitor"])
+            print("SRM monitoring service has been set up with systemd.")
         }
     }
 }
@@ -997,8 +1050,8 @@ extension SRM {
         func startProcessInBackground(executable: String, processName: String, logFileURL: URL, restart: Bool) throws {
             // Prepare the command
             let command = """
-            nohup \(executable) >> "\(logFileURL.path)" 2>&1 &
-            echo $!
+            nohup stdbuf -oL \(executable) > \(logFileURL.path) 2>&1 & echo $! && disown
+
             """
             
             // Prepare the process
@@ -1247,7 +1300,11 @@ struct ProcessManager {
                 processInfos.append(processInfo)
             }
         }
-        return processInfos
+        return processInfos.sorted(by: {
+            guard let one = $0.startTime else { return false }
+            guard let two = $1.startTime else { return true }
+            return one < two
+        })
     }
 }
 

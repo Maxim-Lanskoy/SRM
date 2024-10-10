@@ -30,7 +30,7 @@ let package = Package(
             path: "Sources/SRM"
         ),
         .executableTarget(
-            name: concatenator, path: "Sources/\(concatenator)"
+            name: concatenator, path: "Sources/\(concatenator)", exclude: ["ConcatenatedSwiftFiles.txt"]
         )
     ]
 )
