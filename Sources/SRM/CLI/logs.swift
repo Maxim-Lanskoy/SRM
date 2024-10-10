@@ -49,10 +49,8 @@ extension SRM {
             
             if FileManager.default.fileExists(atPath: logFilePath) {
                 if !noFollow {
-                    // Display the specified number of lines before tailing
-                    displayLastLines(of: logFilePath, processName: name, lines: lines)
                     // Tail logs in real-time
-                    tailLogFile(atPath: logFilePath, processName: name)
+                    tailLogFile(atPath: logFilePath, processName: name, lines: lines)
                 } else {
                     // Only display the specified number of lines
                     let logData = try String(contentsOfFile: logFilePath, encoding: .utf8)
@@ -86,97 +84,99 @@ extension SRM {
                 return
             }
             
-            var allLogEntries: [(timestamp: Date, processName: String, line: String)] = []
+            var logLines = [(String, String)]() // Tuple to hold (process name, log line)
 
-            // Collect log entries from all processes
+            // Read the last N lines from all log files
             for processInfo in processInfos {
-                let logFilePath = ProcessManager.logsDirectory.appendingPathComponent("\(processInfo.processName).log").path
-                if FileManager.default.fileExists(atPath: logFilePath) {
-                    if let logData = try? String(contentsOfFile: logFilePath, encoding: .utf8) {
-                        let logLines = logData.split(separator: "\n").suffix(lines)
-                        for line in logLines {
-                            if let timestamp = extractTimestamp(from: line) {
-                                allLogEntries.append((timestamp, processInfo.processName, String(line)))
-                            }
-                        }
-                    }
+                let logFilePath = ProcessManager.logsDirectory.appendingPathComponent("\(processInfo.processName).log")
+                
+                guard FileManager.default.fileExists(atPath: logFilePath.path) else {
+                    print("No logs found for process: \(processInfo.processName)")
+                    continue
+                }
+
+                let logData = try String(contentsOfFile: logFilePath.path, encoding: .utf8)
+                let lines = logData.split(separator: "\n").suffix(self.lines)
+                for line in lines {
+                    logLines.append((processInfo.processName, String(line)))
                 }
             }
-            
-            // Sort all entries by timestamp
-            allLogEntries.sort { $0.timestamp < $1.timestamp }
 
-            // Display sorted log entries
-            for entry in allLogEntries {
-                print("[\(entry.processName)] \(entry.line)")
+            // Sort log lines by their timestamp (assuming the format includes a timestamp)
+            logLines.sort { lhs, rhs in
+                extractTimestamp(from: lhs.1) < extractTimestamp(from: rhs.1)
+            }
+
+            // Print the sorted log lines
+            for (processName, line) in logLines {
+                print("[\(processName)] \(line)")
             }
 
             if !noFollow {
-                // Start tailing logs in real-time for all processes
+                print("Tailing logs for all processes. Press Ctrl+C to stop.")
                 tailLogsForAllProcesses(processInfos: processInfos)
             }
         }
-        
-        func extractTimestamp(from logLine: Substring) -> Date? {
-            let timestampPattern = "\\[([^\\]]+)\\]"
-            if let regex = try? NSRegularExpression(pattern: timestampPattern, options: []),
-               let match = regex.firstMatch(in: String(logLine), options: [], range: NSRange(location: 0, length: logLine.count)) {
-                let timestampRange = match.range(at: 1)
-                if let timestampString = Range(timestampRange, in: logLine) {
-                    let timestamp = String(logLine[timestampString])
-                    let dateFormatter = DateFormatter()
-                    dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-                    return dateFormatter.date(from: timestamp)
-                }
+
+        func extractTimestamp(from logLine: String) -> Date {
+            // Assuming the timestamp format is: [YYYY-MM-DD HH:MM:SS]
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "[yyyy-MM-dd HH:mm:ss]"
+            
+            let components = logLine.split(separator: "]", maxSplits: 1, omittingEmptySubsequences: true)
+            if let dateString = components.first?.trimmingCharacters(in: .whitespacesAndNewlines) {
+                return dateFormatter.date(from: dateString) ?? Date.distantPast
             }
-            return nil
+            return Date.distantPast
         }
-        
+
         func tailLogsForAllProcesses(processInfos: [CodableProcessInfo]) {
-            var fileHandles: [FileHandle: String] = [:]
+            var allFileHandles: [FileHandle] = []
+
+            defer {
+                allFileHandles.forEach { $0.closeFile() }
+            }
             
             for processInfo in processInfos {
-                let logFilePath = ProcessManager.logsDirectory.appendingPathComponent("\(processInfo.processName).log").path
-                if FileManager.default.fileExists(atPath: logFilePath) {
-                    if let fileHandle = FileHandle(forReadingAtPath: logFilePath) {
-                        // Move to the end of the file for real-time tailing
-                        fileHandle.seekToEndOfFile()
-                        fileHandles[fileHandle] = processInfo.processName
-                    } else {
-                        print("Unable to open log file for \(processInfo.processName).")
-                    }
+                let logFilePath = ProcessManager.logsDirectory.appendingPathComponent("\(processInfo.processName).log")
+                
+                guard FileManager.default.fileExists(atPath: logFilePath.path) else {
+                    continue
                 }
-            }
-            
-            // Use a unified dispatch source to read data from all file handles
-            let queue = DispatchQueue(label: "com.srm.logs.all", qos: .utility)
-            
-            for (fileHandle, processName) in fileHandles {
+                
+                guard let fileHandle = FileHandle(forReadingAtPath: logFilePath.path) else {
+                    continue
+                }
+                
+                allFileHandles.append(fileHandle)
+                fileHandle.seekToEndOfFile()
+
+                // Observe each file for new data
+                let processName = processInfo.processName
                 fileHandle.readabilityHandler = { handle in
                     let data = handle.availableData
-                    if let logEntry = String(data: data, encoding: .utf8), !logEntry.isEmpty {
-                        queue.async {
-                            print("[\(processName)] \(logEntry)", terminator: "")
+                    if let logEntry = String(data: data, encoding: .utf8) {
+                        let lines = logEntry.split(separator: "\n")
+                        for line in lines {
+                            print("[\(processName)] \(line)")
                         }
                     }
                 }
             }
-            
-            // Keep the run loop alive indefinitely to continue tailing all logs
-            print("Tailing logs for all processes. Press Ctrl+C to stop.")
-            dispatchMain()
+
+            // Keep the run loop alive
+            RunLoop.current.run()
         }
         
-        func displayLastLines(of filePath: String, processName: String, lines: Int) {
-            if let logData = try? String(contentsOfFile: filePath, encoding: .utf8) {
+        func tailLogFile(atPath path: String, processName: String, lines: Int) {
+            // Read the last N lines
+            if let logData = try? String(contentsOfFile: path, encoding: .utf8) {
                 let logLines = logData.split(separator: "\n").suffix(lines)
                 for line in logLines {
                     print("[\(processName)] \(line)")
                 }
             }
-        }
-        
-        func tailLogFile(atPath path: String, processName: String) {
+            
             guard let fileHandle = FileHandle(forReadingAtPath: path) else {
                 print("Unable to open log file for \(processName).")
                 return

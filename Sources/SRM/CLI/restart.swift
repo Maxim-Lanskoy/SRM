@@ -59,21 +59,21 @@ extension SRM {
                 print("Process \(name) with PID \(pid) has been stopped.")
             }
 
-            // Update process info to set status to "stopped"
+            // Set status to "stopped"
             var updatedProcessInfo = processInfo
             updatedProcessInfo.status = "stopped"
             updatedProcessInfo.processIdentifier = nil
             updatedProcessInfo.startTime = nil
             try ProcessManager.saveProcessInfo(updatedProcessInfo)
-
+            
             // Start the process again
             var startCommand = Start()
             startCommand.executableOrName = processInfo.executable
             startCommand.name = processInfo.processName
             startCommand.restart = processInfo.restart
+            startCommand.watch = false
             try startCommand.run()
         }
-
 
         func restartProcess(atIndex index: Int) throws {
             let processInfos = try ProcessManager.fetchAllProcessInfos()
