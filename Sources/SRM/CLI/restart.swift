@@ -67,12 +67,13 @@ extension SRM {
             try ProcessManager.saveProcessInfo(updatedProcessInfo)
 
             // Start the process again
-            let startCommand = Start()
-            startCommand.executable = processInfo.executable
+            var startCommand = Start()
+            startCommand.executableOrName = processInfo.executable
             startCommand.name = processInfo.processName
             startCommand.restart = processInfo.restart
             try startCommand.run()
         }
+
 
         func restartProcess(atIndex index: Int) throws {
             let processInfos = try ProcessManager.fetchAllProcessInfos()

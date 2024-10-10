@@ -53,7 +53,9 @@ extension SRM {
             let logFilePath = processInfo.logFilePath
             
             // Build the command to start the process with nohup and redirect output to log file
-            let command = "nohup \(executable) >> \(logFilePath) 2>&1 & echo $!"
+            let command = """
+            nohup stdbuf -oL \(executable) > \(logFilePath) 2>&1 & echo $! && disown
+            """
             
             do {
                 // Run the command and capture the output (PID)

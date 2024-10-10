@@ -58,6 +58,10 @@ struct ProcessManager {
                 processInfos.append(processInfo)
             }
         }
-        return processInfos
+        return processInfos.sorted(by: {
+            guard let one = $0.startTime else { return false }
+            guard let two = $1.startTime else { return true }
+            return one < two
+        })
     }
 }

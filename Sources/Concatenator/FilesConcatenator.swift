@@ -22,48 +22,87 @@ struct SwiftFileConcatenator {
     }
     
     // Updated header structure
-    static var systemInstructions = """
-    **System Instructions:** 
+    static var systemInstructions = ""/*"""
+    **System Instructions:**
     // Use the provided request and concatenated code to address the user's issue or implement new features. 
     // Return only the runnable Swift code block without any markdown syntax (no "```swift" or "```").
     // Ensure the code includes necessary imports, the main structure, and all relevant functions.
     // The code should be self-contained and executable when placed into `result.swift`.
     // Do not include any explanations, comments, or repeated parts from the input code.
-    """
+    """*/
     
     static var requestHeader = "\n\n**Request: \"-=-=-=-\".**\n\n"
     
     static var additionalInfo = """
-    **Project Details:** SRM This is a lightweight, Swift-based command-line tool designed to help manage, monitor, and control various processes, including Swift applications, shell scripts, binaries, and commands. Inspired by PM2, it provides an intuitive interface for starting, stopping, monitoring processes, and viewing real-time logs.
-        
-    **✨ Features**
-    - 🚦 Process Management: Start, stop, restart processes like commands, binaries, or Swift applications.
-    - 📊 Monitoring: List all running processes with real-time tracking.
-    - 📜 Logging: Automatically store and fetch logs for each process.
-    - 🎯 Flexibility: Run shell commands, executables, or scripts seamlessly.
-      
-    **🏃 Usage**
-    SRM should offer a variety of commands to manage and monitor processes, scripts, and executables.
-    🔧 General Commands should look similar to this list.
-    1. Starting a Process:
-    - Start any command, executable, or script with a custom name:
-        "srm start "watch -n 5 free -m" --name MemoryMonitor"
-    - Running a Swift application:
-        "srm start /path/to/swift/app --name SwiftApp"
-    - Running a Shell Script:
-        "srm start ./myscript.sh --name ScriptRunner"
-    2. Stopping a Process:
-    - Stop a running process by its name:
-        "srm stop ProcessName"
-    - This will send a SIGTERM signal to the process and remove its logs from SRM.
-    3. Listing Processes:
-    - See a list of all active processes and their status:
-        "srm list"
-    4. Viewing Logs:
-    - Fetch the latest 10 lines of logs from any process:
-        "srm logs ProcessName"
+    Hi! I'm making SRM (Swift Running Manager).
     
-    This is basic info about SRM tool overall vision and expected features.
+    Executable cli Swift tool project description:
+    SRM is a command-line tool written in Swift that functions as a process manager, similar to pm2. It is designed to manage and monitor the execution of various scripts, commands, executables, or applications on macOS and Linux systems. SRM allows users to start, stop, restart, and monitor processes, as well as view logs and manage process lifecycles.
+
+    Purpose:
+    The primary goal of SRM is to provide developers and system administrators with a lightweight and efficient tool to manage long-running processes without the need to modify the code of the processes being managed. It is particularly useful for running and monitoring scripts or applications where source code modification is not feasible.
+
+    Key Features:
+    Process Management Commands:
+    start: Start a new process or all stopped processes.
+    Supports specifying a custom name for the process.
+    Includes a --restart flag to automatically restart processes if they exit unexpectedly.
+    Introduces a --watch flag to display real-time output of the process.
+    stop: Stop a running process by name or index, or stop all processes.
+    restart: Restart a process by name or index, or restart all processes.
+    list (ls): List all managed processes with details like status, PID, CPU and memory usage, and start time.
+    logs: View logs of a process by name or index, or view logs for all processes.
+    Supports tailing logs in real-time or viewing the last N lines.
+    Monitoring Service:
+    monitor: Start a monitoring service that checks the health of managed processes and restarts them if they crash (when --restart is enabled).
+    Setup and Cleanup:
+    setup: Sets up SRM by building the release version and adding it to the system PATH.
+    destroy: Removes SRM setup and associated files.
+    Process Information Management:
+    Stores process information in JSON files for persistence across sessions.
+    Manages log files, including log rotation when files exceed a specified size.
+    Cross-Platform Support:
+    Designed to work on macOS and Linux systems.
+    Uses Swift's Process API for process execution and management.
+    No Dependency on Modifying Managed Processes:
+    Capable of managing processes without requiring changes to their source code.
+    Handles output buffering issues by providing the --watch flag to capture and display process output in real-time.
+    Similarities to pm2:
+
+    Like pm2, SRM allows for the management of multiple processes, providing start, stop, and restart functionalities.
+    Offers process monitoring and automatic restarts for crashed processes.
+    Provides logging capabilities and real-time output viewing.
+    Use Cases:
+
+    Managing background services or daemons.
+    Running and monitoring scripts or applications written in Swift, Python, shell, or other languages.
+    Deploying applications that need to run continuously and be monitored for crashes or unexpected exits.
+    Environments where modifying the source code of the managed processes is not possible or desirable.
+    Additional Information:
+
+    Logging: SRM manages log files for each process, storing them in a designated logs directory (~/.srm/logs). It supports log rotation to prevent uncontrolled growth of log files.
+    Process Identification: Processes can be managed by name or by their index in the process list.
+    Extensibility: The tool is designed with extensibility in mind, allowing for future enhancements and additional features as needed.
+    User-Friendly Interface: Provides clear and concise command-line output, including tables for listing processes and helpful messages for user actions.
+    Example Commands:
+
+    Start a process and display its output:
+    css
+    Copy code
+    srm start /path/to/app --name MyApp --watch
+    Stop a process by name:
+    arduino
+    Copy code
+    srm stop MyApp
+    View logs for a process:
+    Copy code
+    srm logs MyApp
+    List all managed processes:
+    Copy code
+    srm list
+    Conclusion:
+
+    SRM aims to be a simple yet powerful tool for process management in the development and deployment of applications. By providing essential features similar to pm2, it helps users manage processes effectively without the overhead of larger process management systems.
     """
 
     static var swiftFilesAndContent = ""

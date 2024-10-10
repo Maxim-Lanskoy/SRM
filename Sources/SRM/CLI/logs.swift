@@ -36,7 +36,7 @@ extension SRM {
             if nameOrIndex.lowercased() == "all" {
                 try showLogsForAllProcesses()
             } else if let index = Int(nameOrIndex) {
-                // Show logs for process by index
+                // Adjust index for zero-based array
                 try showLogs(forProcessAtIndex: index)
             } else {
                 // Show logs for process by name
@@ -73,7 +73,7 @@ extension SRM {
                 return
             }
             
-            let processInfo = processInfos[index - 1]
+            let processInfo = processInfos[index - 1] // Adjust for zero-based index
             try showLogs(forProcessNamed: processInfo.processName)
         }
         
@@ -84,22 +84,10 @@ extension SRM {
                 return
             }
             
-            // Create a DispatchGroup to manage concurrent log tailing
-            let group = DispatchGroup()
-            
+            // Display logs for all processes sequentially
             for processInfo in processInfos {
-                group.enter()
-                DispatchQueue.global().async {
-                    defer { group.leave() }
-                    do {
-                        try self.showLogs(forProcessNamed: processInfo.processName)
-                    } catch {
-                        print("Failed to show logs for \(processInfo.processName): \(error)")
-                    }
-                }
+                try showLogs(forProcessNamed: processInfo.processName)
             }
-            
-            group.wait()
         }
         
         func tailLogFile(atPath path: String, processName: String, lines: Int) {

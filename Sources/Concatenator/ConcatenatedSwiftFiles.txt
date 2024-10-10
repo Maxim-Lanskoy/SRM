@@ -1,56 +1,175 @@
-**System Instructions:** 
-// Use the provided request and concatenated code to address the user's issue or implement new features. 
-// Return only the runnable Swift code block without any markdown syntax (no "```swift" or "```").
-// Ensure the code includes necessary imports, the main structure, and all relevant functions.
-// The code should be self-contained and executable when placed into `result.swift`.
-// Do not include any explanations, comments, or repeated parts from the input code.
-
 **Request: "-=-=-=-".**
 
-**Project Details:** SRM This is a lightweight, Swift-based command-line tool designed to help manage, monitor, and control various processes, including Swift applications, shell scripts, binaries, and commands. Inspired by PM2, it provides an intuitive interface for starting, stopping, monitoring processes, and viewing real-time logs.
-    
-**✨ Features**
-- 🚦 Process Management: Start, stop, restart processes like commands, binaries, or Swift applications.
-- 📊 Monitoring: List all running processes with real-time tracking.
-- 📜 Logging: Automatically store and fetch logs for each process.
-- 🎯 Flexibility: Run shell commands, executables, or scripts seamlessly.
-  
-**🏃 Usage**
-SRM should offer a variety of commands to manage and monitor processes, scripts, and executables.
-🔧 General Commands should look similar to this list.
-1. Starting a Process:
-- Start any command, executable, or script with a custom name:
-    "srm start "watch -n 5 free -m" --name MemoryMonitor"
-- Running a Swift application:
-    "srm start /path/to/swift/app --name SwiftApp"
-- Running a Shell Script:
-    "srm start ./myscript.sh --name ScriptRunner"
-2. Stopping a Process:
-- Stop a running process by its name:
-    "srm stop ProcessName"
-- This will send a SIGTERM signal to the process and remove its logs from SRM.
-3. Listing Processes:
-- See a list of all active processes and their status:
-    "srm list"
-4. Viewing Logs:
-- Fetch the latest 10 lines of logs from any process:
-    "srm logs ProcessName"
+Hi! I'm making SRM (Swift Running Manager).
 
-This is basic info about SRM tool overall vision and expected features.
+Executable cli Swift tool project description:
+SRM is a command-line tool written in Swift that functions as a process manager, similar to pm2. It is designed to manage and monitor the execution of various scripts, commands, executables, or applications on macOS and Linux systems. SRM allows users to start, stop, restart, and monitor processes, as well as view logs and manage process lifecycles.
+
+Purpose:
+The primary goal of SRM is to provide developers and system administrators with a lightweight and efficient tool to manage long-running processes without the need to modify the code of the processes being managed. It is particularly useful for running and monitoring scripts or applications where source code modification is not feasible.
+
+Key Features:
+Process Management Commands:
+start: Start a new process or all stopped processes.
+Supports specifying a custom name for the process.
+Includes a --restart flag to automatically restart processes if they exit unexpectedly.
+Introduces a --watch flag to display real-time output of the process.
+stop: Stop a running process by name or index, or stop all processes.
+restart: Restart a process by name or index, or restart all processes.
+list (ls): List all managed processes with details like status, PID, CPU and memory usage, and start time.
+logs: View logs of a process by name or index, or view logs for all processes.
+Supports tailing logs in real-time or viewing the last N lines.
+Monitoring Service:
+monitor: Start a monitoring service that checks the health of managed processes and restarts them if they crash (when --restart is enabled).
+Setup and Cleanup:
+setup: Sets up SRM by building the release version and adding it to the system PATH.
+destroy: Removes SRM setup and associated files.
+Process Information Management:
+Stores process information in JSON files for persistence across sessions.
+Manages log files, including log rotation when files exceed a specified size.
+Cross-Platform Support:
+Designed to work on macOS and Linux systems.
+Uses Swift's Process API for process execution and management.
+No Dependency on Modifying Managed Processes:
+Capable of managing processes without requiring changes to their source code.
+Handles output buffering issues by providing the --watch flag to capture and display process output in real-time.
+Similarities to pm2:
+
+Like pm2, SRM allows for the management of multiple processes, providing start, stop, and restart functionalities.
+Offers process monitoring and automatic restarts for crashed processes.
+Provides logging capabilities and real-time output viewing.
+Use Cases:
+
+Managing background services or daemons.
+Running and monitoring scripts or applications written in Swift, Python, shell, or other languages.
+Deploying applications that need to run continuously and be monitored for crashes or unexpected exits.
+Environments where modifying the source code of the managed processes is not possible or desirable.
+Additional Information:
+
+Logging: SRM manages log files for each process, storing them in a designated logs directory (~/.srm/logs). It supports log rotation to prevent uncontrolled growth of log files.
+Process Identification: Processes can be managed by name or by their index in the process list.
+Extensibility: The tool is designed with extensibility in mind, allowing for future enhancements and additional features as needed.
+User-Friendly Interface: Provides clear and concise command-line output, including tables for listing processes and helpful messages for user actions.
+Example Commands:
+
+Start a process and display its output:
+css
+Copy code
+srm start /path/to/app --name MyApp --watch
+Stop a process by name:
+arduino
+Copy code
+srm stop MyApp
+View logs for a process:
+Copy code
+srm logs MyApp
+List all managed processes:
+Copy code
+srm list
+Conclusion:
+
+SRM aims to be a simple yet powerful tool for process management in the development and deployment of applications. By providing essential features similar to pm2, it helps users manage processes effectively without the overhead of larger process management systems.
 Project File Structure:
 📁 Sources
     📁 SRM
         📄 main.swift
         📁 CLI
+            📄 delete.swift
             📄 destroy.swift
             📄 list.swift
             📄 logs.swift
             📄 minotor.swift
+            📄 restart.swift
             📄 setup.swift
             📄 start.swift
             📄 stop.swift
         📁 Utils
             📄 ProcessManager.swift
+
+// File: delete.swift | Path: /Users/maximlanskoy/SRM/Sources/SRM/CLI/delete.swift
+//
+//  delete.swift
+//  Swift Running Manager
+//
+//  Created by Maxim Lanskoy on 10.10.2024.
+//
+
+import ArgumentParser
+import Foundation
+
+extension SRM {
+    struct Delete: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Delete a process from SRM.",
+            discussion: """
+            The `delete` command removes a process from SRM's management.
+
+            Examples:
+              - Delete a process by name: `srm delete MyApp`
+              - Delete a process by index: `srm delete 1`
+              - Delete all processes: `srm delete all`
+            """
+        )
+
+        @Argument(help: "Name or index of the process to delete, or 'all' to delete all processes.")
+        var nameOrIndex: String
+
+        func run() throws {
+            if nameOrIndex.lowercased() == "all" {
+                try deleteAllProcesses()
+            } else if let index = Int(nameOrIndex) {
+                // Delete process by index
+                try deleteProcess(atIndex: index)
+            } else {
+                // Delete process by name
+                try deleteProcess(named: nameOrIndex)
+            }
+        }
+
+        func deleteProcess(named name: String) throws {
+            print("Deleting process: \(name)")
+
+            guard let processInfo = try ProcessManager.fetchProcessInfo(for: name) else {
+                print("No process found with name: \(name)")
+                return
+            }
+
+            // Remove process info
+            try ProcessManager.removeProcessInfo(for: name)
+
+            // Remove log file
+            let logFilePath = processInfo.logFilePath
+            if FileManager.default.fileExists(atPath: logFilePath) {
+                try FileManager.default.removeItem(atPath: logFilePath)
+            }
+
+            print("Process \(name) has been deleted from SRM.")
+        }
+
+        func deleteProcess(atIndex index: Int) throws {
+            let processInfos = try ProcessManager.fetchAllProcessInfos()
+            if index < 1 || index > processInfos.count {
+                print("Invalid process index: \(index)")
+                return
+            }
+
+            let processInfo = processInfos[index - 1]
+            try deleteProcess(named: processInfo.processName)
+        }
+
+        func deleteAllProcesses() throws {
+            let processInfos = try ProcessManager.fetchAllProcessInfos()
+            if processInfos.isEmpty {
+                print("No processes to delete.")
+                return
+            }
+
+            for processInfo in processInfos {
+                try deleteProcess(named: processInfo.processName)
+            }
+        }
+    }
+}
 
 // File: destroy.swift | Path: /Users/maximlanskoy/SRM/Sources/SRM/CLI/destroy.swift
 //
@@ -135,6 +254,7 @@ extension SRM {
 import ArgumentParser
 import Foundation
 import ShellOut
+import CLITable
 
 extension SRM {
     struct List: ParsableCommand {
@@ -148,41 +268,51 @@ extension SRM {
             """,
             aliases: ["ls"]
         )
-
+        
         func run() throws {
             let processInfos = try ProcessManager.fetchAllProcessInfos()
 
             if processInfos.isEmpty {
-                print("No running processes found.")
+                print("No processes found.")
                 return
             }
 
-            // Print header
-            print("Name    PID    CPU%    MEM%    Start Time")
+            // Create headers for the table, including Index
+            let headers = ["Index", "Name", "Status", "PID", "CPU%", "MEM%", "Start Time"]
 
-            for processInfo in processInfos {
-                let pid = processInfo.processIdentifier
-                if isProcessRunning(pid: pid) {
-                    let cpuUsage = getCPUUsage(pid: pid)
-                    let memUsage = getMemoryUsage(pid: pid)
-                    let startTime = formatDate(processInfo.startTime)
+            // Initialize the table with headers
+            var table = CLITable(headers: headers)
 
-                    // Use string interpolation instead of String(format:)
-                    /*let output = String(
-                        format: "%-20@ %-8d %-8@ %-8@ %-20@",
-                        processInfo.processName as NSString,
-                        pid,
-                        cpuUsage as NSString,
-                        memUsage as NSString,
-                        startTime as NSString
-                    )
-                    print(output)*/
-                    print("Name: \(processInfo.processName), PID: \(pid), CPU%: \(cpuUsage), MEM%: \(memUsage), Start Time: \(startTime)")
-                } else {
-                    // Process is not running, remove its info
-                    try? ProcessManager.removeProcessInfo(for: processInfo.processName)
+            for (index, processInfo) in processInfos.enumerated() {
+                var status = processInfo.status
+                let pid = processInfo.processIdentifier ?? 0
+                let startTime = processInfo.startTime != nil ? formatDate(processInfo.startTime!) : "N/A"
+                var cpuUsage = "N/A"
+                var memUsage = "N/A"
+
+                if let pid = processInfo.processIdentifier, isProcessRunning(pid: pid) {
+                    cpuUsage = getCPUUsage(pid: pid)
+                    memUsage = getMemoryUsage(pid: pid)
+                    status = "running"
+                } else if status == "running" {
+                    // Process was marked as running but is no longer running
+                    status = "stopped"
                 }
+
+                // Add a row to the table
+                table.addRow([
+                    "\(index + 1)",
+                    processInfo.processName,
+                    status,
+                    "\(pid)",
+                    cpuUsage,
+                    memUsage,
+                    startTime
+                ])
             }
+
+            // Display the table
+            table.showTable()
         }
 
         func isProcessRunning(pid: Int32) -> Bool {
@@ -253,63 +383,109 @@ extension SRM {
             abstract: "View logs of a process.",
             discussion: """
             The `logs` command displays the logs of a managed process.
-
+            
             Examples:
-              - View last 10 lines: `srm logs MyApp`
-              - View last 50 lines: `srm logs MyApp --lines 50`
-              - Tail logs in real-time: `srm logs MyApp --follow`
+              - View last 10 lines and follow: `srm logs MyApp`
+              - View last 50 lines and follow: `srm logs MyApp --lines 50`
+              - View logs without following: `srm logs MyApp --no-follow`
+              - View logs for all processes: `srm logs all`
             """
         )
-
-        @Argument(help: "Name of the process to fetch logs for.")
-        var name: String
-
+        
+        @Argument(help: "Name or index of the process to fetch logs for, or 'all' to fetch logs for all processes.")
+        var nameOrIndex: String
+        
         @Option(name: .shortAndLong, help: "Number of lines to display.")
         var lines: Int = 10
-
-        @Flag(name: .shortAndLong, help: "Tail logs in real-time.")
-        var follow: Bool = false
-
+        
+        @Flag(name: .shortAndLong, help: "Do not tail logs in real-time.")
+        var noFollow: Bool = false
+        
         func run() throws {
+            if nameOrIndex.lowercased() == "all" {
+                try showLogsForAllProcesses()
+            } else if let index = Int(nameOrIndex) {
+                // Adjust index for zero-based array
+                try showLogs(forProcessAtIndex: index)
+            } else {
+                // Show logs for process by name
+                try showLogs(forProcessNamed: nameOrIndex)
+            }
+        }
+        
+        func showLogs(forProcessNamed name: String) throws {
             let logFilePath = ProcessManager.logsDirectory.appendingPathComponent("\(name).log").path
-
+            
             if FileManager.default.fileExists(atPath: logFilePath) {
-                if follow {
-                    tailLogFile(atPath: logFilePath)
+                if !noFollow {
+                    // Tail logs in real-time
+                    tailLogFile(atPath: logFilePath, processName: name, lines: lines)
                 } else {
+                    // Only display the specified number of lines
                     let logData = try String(contentsOfFile: logFilePath, encoding: .utf8)
                     let logLines = logData.split(separator: "\n").suffix(lines)
-
+                    
                     print("Last \(lines) lines of logs for \(name):")
                     for line in logLines {
-                        print(line)
+                        print("[\(name)] \(line)")
                     }
                 }
             } else {
                 print("No logs found for process: \(name)")
             }
         }
-
-        func tailLogFile(atPath path: String) {
-            guard let fileHandle = FileHandle(forReadingAtPath: path) else {
-                print("Unable to open log file.")
+        
+        func showLogs(forProcessAtIndex index: Int) throws {
+            let processInfos = try ProcessManager.fetchAllProcessInfos()
+            if index < 1 || index > processInfos.count {
+                print("Invalid process index: \(index)")
                 return
             }
-
+            
+            let processInfo = processInfos[index - 1] // Adjust for zero-based index
+            try showLogs(forProcessNamed: processInfo.processName)
+        }
+        
+        func showLogsForAllProcesses() throws {
+            let processInfos = try ProcessManager.fetchAllProcessInfos()
+            if processInfos.isEmpty {
+                print("No processes found.")
+                return
+            }
+            
+            // Display logs for all processes sequentially
+            for processInfo in processInfos {
+                try showLogs(forProcessNamed: processInfo.processName)
+            }
+        }
+        
+        func tailLogFile(atPath path: String, processName: String, lines: Int) {
+            // Read the last N lines
+            if let logData = try? String(contentsOfFile: path, encoding: .utf8) {
+                let logLines = logData.split(separator: "\n").suffix(lines)
+                for line in logLines {
+                    print("[\(processName)] \(line)")
+                }
+            }
+            
+            guard let fileHandle = FileHandle(forReadingAtPath: path) else {
+                print("Unable to open log file for \(processName).")
+                return
+            }
+            
             // Move to the end of the file
             fileHandle.seekToEndOfFile()
-
-            print("Tailing logs for \(name). Press Ctrl+C to stop.")
-
+            
+            print("Tailing logs for \(processName). Press Ctrl+C to stop.")
+            
             // Observe the file for new data
-            let queue = DispatchQueue.global()
             fileHandle.readabilityHandler = { handle in
                 let data = handle.availableData
                 if let logEntry = String(data: data, encoding: .utf8) {
-                    print(logEntry, terminator: "")
+                    print("[\(processName)] \(logEntry)", terminator: "")
                 }
             }
-
+            
             // Keep the run loop alive
             RunLoop.current.run()
         }
@@ -334,63 +510,185 @@ extension SRM {
 
         func run() throws {
             print("Starting SRM monitoring service...")
-
+            
             while true {
                 // Fetch all process info files
                 let processInfos = try ProcessManager.fetchAllProcessInfos()
-
-                for processInfo in processInfos {
-                    // Check if process is running
-                    let pid = processInfo.processIdentifier
-                    if !isProcessRunning(pid: pid) {
+                
+                for var processInfo in processInfos {
+                    if processInfo.status == "error" || processInfo.status == "stopped" {
+                        // Skip processes that are in error or stopped state
+                        continue
+                    }
+                    
+                    if let pid = processInfo.processIdentifier, !isProcessRunning(pid: pid) {
                         if processInfo.restart {
                             print("Process \(processInfo.processName) has stopped. Restarting...")
                             // Restart the process
-                            try restartProcess(processInfo: processInfo)
+                            try restartProcess(processInfo: &processInfo)
                         } else {
-                            // Remove process info as it is no longer running
-                            try ProcessManager.removeProcessInfo(for: processInfo.processName)
+                            // Update process info to set status to "stopped" and remove pid and startTime
+                            processInfo.status = "stopped"
+                            processInfo.processIdentifier = nil
+                            processInfo.startTime = nil
+                            try ProcessManager.saveProcessInfo(processInfo)
                             print("Process \(processInfo.processName) has stopped and will not be restarted.")
                         }
                     }
                 }
-
+                
                 // Sleep for 5 seconds before the next check
                 Thread.sleep(forTimeInterval: 5)
+            }
+        }
+        
+        func restartProcess(processInfo: inout CodableProcessInfo) throws {
+            let name = processInfo.processName
+            let executable = processInfo.executable
+            let logFilePath = processInfo.logFilePath
+            
+            // Build the command to start the process with nohup and redirect output to log file
+            let command = "nohup \(executable) >> \(logFilePath) 2>&1 & echo $!"
+            
+            do {
+                // Run the command and capture the output (PID)
+                let output = try shellOut(to: command)
+                let pidString = output.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+                guard let pid = Int32(pidString) else {
+                    throw RuntimeError("Failed to retrieve PID of the restarted process.")
+                }
+                
+                // Update process info with new PID, start time, and status
+                processInfo.processIdentifier = pid
+                processInfo.startTime = Date()
+                processInfo.status = "running"
+                try ProcessManager.saveProcessInfo(processInfo)
+                
+                print("Process \(name) restarted with PID: \(pid).")
+            } catch {
+                print("Failed to restart process \(name): \(error)")
+                // Update process info status to "error"
+                processInfo.status = "error"
+                processInfo.processIdentifier = nil
+                processInfo.startTime = nil
+                try ProcessManager.saveProcessInfo(processInfo)
             }
         }
 
         func isProcessRunning(pid: Int32) -> Bool {
             return kill(pid, 0) == 0
         }
+    }
+}
 
-        func restartProcess(processInfo: CodableProcessInfo) throws {
-            let name = processInfo.processName
-            let executable = processInfo.executable
-            let logFilePath = processInfo.logFilePath
+// File: restart.swift | Path: /Users/maximlanskoy/SRM/Sources/SRM/CLI/restart.swift
+//
+//  restart.swift
+//  Swift Running Manager
+//
+//  Created by Maxim Lanskoy on 10.10.2024.
+//
 
-            // Build the command to start the process with nohup and redirect output to log file
-            let command = "nohup \(executable) >> \(logFilePath) 2>&1 & echo $!"
+import ArgumentParser
+import Foundation
+import ShellOut
 
-            // Run the command and capture the output (PID)
-            let output = try shellOut(to: command)
-            let pidString = output.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
-            guard let pid = Int32(pidString) else {
-                throw RuntimeError("Failed to retrieve PID of the restarted process.")
+extension SRM {
+    struct Restart: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Restart a process managed by SRM.",
+            discussion: """
+            The `restart` command restarts a process by its name or index.
+
+            Examples:
+              - Restart a process by name: `srm restart MyApp`
+              - Restart a process by index: `srm restart 1`
+              - Restart all processes: `srm restart all`
+            """
+        )
+
+        @Argument(help: "Name or index of the process to restart, or 'all' to restart all processes.")
+        var nameOrIndex: String
+
+        func run() throws {
+            if nameOrIndex.lowercased() == "all" {
+                try restartAllProcesses()
+            } else if let index = Int(nameOrIndex) {
+                // Restart process by index
+                try restartProcess(atIndex: index)
+            } else {
+                // Restart process by name
+                try restartProcess(named: nameOrIndex)
+            }
+        }
+
+        func restartProcess(named name: String) throws {
+            print("Restarting process: \(name)")
+
+            guard let processInfo = try ProcessManager.fetchProcessInfo(for: name) else {
+                print("No process found with name: \(name)")
+                return
             }
 
-            // Update process info with new PID and start time
-            let updatedProcessInfo = CodableProcessInfo(
-                processName: name,
-                processIdentifier: pid,
-                startTime: Date(),
-                restart: processInfo.restart,
-                executable: executable,
-                logFilePath: logFilePath
-            )
+            // Stop the process if it's running
+            if let pid = processInfo.processIdentifier, isProcessRunning(pid: pid) {
+                #if os(Windows)
+                // Windows-specific kill command
+                let command = "taskkill /PID \(pid) /F"
+                #else
+                // Unix-like kill command
+                let command = "kill \(pid)"
+                #endif
+                try shellOut(to: command)
+                print("Process \(name) with PID \(pid) has been stopped.")
+            }
+
+            // Update process info to set status to "stopped"
+            var updatedProcessInfo = processInfo
+            updatedProcessInfo.status = "stopped"
+            updatedProcessInfo.processIdentifier = nil
+            updatedProcessInfo.startTime = nil
             try ProcessManager.saveProcessInfo(updatedProcessInfo)
 
-            print("Process \(name) restarted with PID: \(pid).")
+            // Start the process again
+            var startCommand = Start()
+            startCommand.executableOrName = processInfo.executable
+            startCommand.name = processInfo.processName
+            startCommand.restart = processInfo.restart
+            try startCommand.run()
+        }
+
+
+        func restartProcess(atIndex index: Int) throws {
+            let processInfos = try ProcessManager.fetchAllProcessInfos()
+            if index < 1 || index > processInfos.count {
+                print("Invalid process index: \(index)")
+                return
+            }
+
+            let processInfo = processInfos[index - 1]
+            try restartProcess(named: processInfo.processName)
+        }
+
+        func restartAllProcesses() throws {
+            let processInfos = try ProcessManager.fetchAllProcessInfos()
+            if processInfos.isEmpty {
+                print("No processes to restart.")
+                return
+            }
+
+            for processInfo in processInfos {
+                try restartProcess(named: processInfo.processName)
+            }
+        }
+
+        func isProcessRunning(pid: Int32) -> Bool {
+            #if os(Windows)
+            // Windows-specific implementation
+            return false // Placeholder
+            #else
+            return kill(pid, 0) == 0
+            #endif
         }
     }
 }
@@ -498,6 +796,7 @@ extension SRM {
 import ArgumentParser
 import Foundation
 import ShellOut
+import Dispatch
 
 extension SRM {
     struct Start: ParsableCommand {
@@ -512,32 +811,48 @@ extension SRM {
               - Start a command: `srm start "python script.py" --name PythonScript`
 
             Options:
+              - Start all stopped processes: `srm start all`
               - You can specify a custom name using `--name`.
               - Use `--restart` to automatically restart the process if it crashes.
+              - Use `--watch` to start the process and display its output in real-time.
             """
         )
 
-        @Argument(help: "The script, command, or executable to run.")
-        var executable: String
-
+        @Argument(help: "The script, command, or executable to run, or 'all' to start all stopped processes.")
+        var executableOrName: String?
+        
         @Option(name: .shortAndLong, help: "Specify a custom name for the process.")
         var name: String?
-
+        
         @Flag(name: .shortAndLong, help: "Automatically restart the process if it exits unexpectedly.")
         var restart: Bool = false
 
+        @Flag(name: .long, help: "Start the process and display its output in real-time.")
+        var watch: Bool = false
+
         func run() throws {
+            if executableOrName?.lowercased() == "all" {
+                try startAllProcesses()
+            } else if let executable = executableOrName {
+                // Start a new process with the provided executable
+                try startProcess(executable: executable, name: name, restart: restart, watch: watch)
+            } else {
+                print("Please provide an executable to start or 'all' to start all stopped processes.")
+            }
+        }
+
+        func startProcess(executable: String, name: String?, restart: Bool, watch: Bool) throws {
             let processName = name ?? URL(fileURLWithPath: executable).lastPathComponent
             print("Starting process: \(processName)")
-
+            
             // Ensure logs directory exists
             try FileManager.default.createDirectory(at: ProcessManager.logsDirectory, withIntermediateDirectories: true, attributes: nil)
-
-            let logFilePath = ProcessManager.logsDirectory.appendingPathComponent("\(processName).log").path
-
+            
+            let logFileURL = ProcessManager.logsDirectory.appendingPathComponent("\(processName).log")
+            
             // Rotate log if it exceeds size limit (e.g., 5 MB)
             let maxLogSize: UInt64 = 5 * 1024 * 1024 // 5 MB
-            if let attributes = try? FileManager.default.attributesOfItem(atPath: logFilePath),
+            if let attributes = try? FileManager.default.attributesOfItem(atPath: logFileURL.path),
                let fileSize = attributes[FileAttributeKey.size] as? UInt64,
                fileSize > maxLogSize {
                 // Move current log to archived log with timestamp
@@ -545,33 +860,221 @@ extension SRM {
                 dateFormatter.dateFormat = "yyyyMMddHHmmss"
                 let timestamp = dateFormatter.string(from: Date())
                 let archivedLogPath = ProcessManager.logsDirectory.appendingPathComponent("\(processName)_\(timestamp).log")
-                try FileManager.default.moveItem(atPath: logFilePath, toPath: archivedLogPath.path)
+                try FileManager.default.moveItem(atPath: logFileURL.path, toPath: archivedLogPath.path)
                 print("Rotated log file to \(archivedLogPath.lastPathComponent)")
             }
-
-            // Build the command to start the process with nohup and redirect output to log file
-            let command = "nohup \(executable) >> \(logFilePath) 2>&1 & echo $!"
-
-            // Run the command and capture the output (PID)
-            let output = try shellOut(to: command)
-            let pidString = output.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
-            guard let pid = Int32(pidString) else {
-                throw RuntimeError("Failed to retrieve PID of the started process.")
+            
+            if watch {
+                // Start the process in the foreground and capture output
+                try startProcessWithWatch(executable: executable, processName: processName, logFileURL: logFileURL, restart: restart)
+            } else {
+                // Start the process in the background as before
+                try startProcessInBackground(executable: executable, processName: processName, logFileURL: logFileURL, restart: restart)
             }
+        }
 
-            // Save process info
+        func startProcessWithWatch(executable: String, processName: String, logFileURL: URL, restart: Bool) throws {
+            let process = Process()
+            // Split the executable and its arguments
+            let arguments = splitCommandLine(executable)
+            guard let executablePath = arguments.first else {
+                throw RuntimeError("Executable path is empty.")
+            }
+            process.executableURL = URL(fileURLWithPath: executablePath)
+            process.arguments = Array(arguments.dropFirst())
+            
+            // Set up pipes to capture output
+            let outputPipe = Pipe()
+            let errorPipe = Pipe()
+            process.standardOutput = outputPipe
+            process.standardError = errorPipe
+            
+            // Create or open the log file
+            if !FileManager.default.fileExists(atPath: logFileURL.path) {
+                FileManager.default.createFile(atPath: logFileURL.path, contents: nil, attributes: nil)
+            }
+            let logFileHandle = try FileHandle(forWritingTo: logFileURL)
+            logFileHandle.seekToEndOfFile()
+            
+            // Start the process
+            try process.run()
+            
+            let pid = process.processIdentifier
+            
+            // Save process info with status "running"
             let processInfo = CodableProcessInfo(
                 processName: processName,
                 processIdentifier: pid,
                 startTime: Date(),
                 restart: restart,
                 executable: executable,
-                logFilePath: logFilePath
+                logFilePath: logFileURL.path,
+                status: "running"
             )
             try ProcessManager.saveProcessInfo(processInfo)
-
-            print("Process \(processName) started with PID: \(pid).")
+            
+            print("Process \(processName) started with PID: \(pid). Press Ctrl+C to stop.")
+            
+            // Handle SIGINT (Ctrl+C) using DispatchSourceSignal
+            // Ignore default handling of SIGINT
+            signal(SIGINT, SIG_IGN)
+            
+            // Create a DispatchSourceSignal for SIGINT
+            let signalSource = DispatchSource.makeSignalSource(signal: SIGINT, queue: DispatchQueue.main)
+            signalSource.setEventHandler {
+                print("\nReceived interrupt signal. Terminating process \(processName)...")
+                process.terminate()
+                signalSource.cancel()
+            }
+            signalSource.resume()
+            
+            // Set up a dispatch group to wait for both output and error streams
+            let dispatchGroup = DispatchGroup()
+            
+            // Handle standard output
+            dispatchGroup.enter()
+            outputPipe.fileHandleForReading.readabilityHandler = { handle in
+                let data = handle.availableData
+                if data.isEmpty {
+                    outputPipe.fileHandleForReading.readabilityHandler = nil
+                    dispatchGroup.leave()
+                } else {
+                    // Write to log file
+                    logFileHandle.write(data)
+                    // Print to terminal
+                    if let output = String(data: data, encoding: .utf8) {
+                        print(output, terminator: "")
+                        fflush(stdout)
+                    }
+                }
+            }
+            
+            // Handle standard error
+            dispatchGroup.enter()
+            errorPipe.fileHandleForReading.readabilityHandler = { handle in
+                let data = handle.availableData
+                if data.isEmpty {
+                    errorPipe.fileHandleForReading.readabilityHandler = nil
+                    dispatchGroup.leave()
+                } else {
+                    // Write to log file
+                    logFileHandle.write(data)
+                    // Print to terminal (you may want to format errors differently)
+                    if let output = String(data: data, encoding: .utf8) {
+                        fputs(output, stderr)
+                        fflush(stderr)
+                    }
+                }
+            }
+            
+            // Wait for the process to exit
+            process.waitUntilExit()
+            
+            // Wait for output handling to finish
+            dispatchGroup.wait()
+            
+            // Close file handles
+            logFileHandle.closeFile()
+            outputPipe.fileHandleForReading.closeFile()
+            errorPipe.fileHandleForReading.closeFile()
+            
+            // Cancel the signal source
+            signalSource.cancel()
+            
+            // Restore default signal handling
+            signal(SIGINT, SIG_DFL)
+            
+            // Update process info to reflect that the process has exited
+            var updatedProcessInfo = processInfo
+            updatedProcessInfo.status = "stopped"
+            updatedProcessInfo.processIdentifier = nil
+            updatedProcessInfo.startTime = nil
+            try ProcessManager.saveProcessInfo(updatedProcessInfo)
+            
+            print("\nProcess \(processName) has exited.")
         }
+
+        func startProcessInBackground(executable: String, processName: String, logFileURL: URL, restart: Bool) throws {
+            // Prepare the command
+            let command = """
+            nohup \(executable) >> "\(logFileURL.path)" 2>&1 &
+            echo $!
+            """
+            
+            // Prepare the process
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/sh")
+            process.arguments = ["-c", command]
+            
+            // Create a pipe to capture the PID output
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = pipe
+            
+            // Start the process
+            try process.run()
+            process.waitUntilExit()
+            
+            // Read the PID from the output
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            if let pidString = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+               let pid = Int32(pidString) {
+                
+                // Save process info with status "running"
+                let processInfo = CodableProcessInfo(
+                    processName: processName,
+                    processIdentifier: pid,
+                    startTime: Date(),
+                    restart: restart,
+                    executable: executable,
+                    logFilePath: logFileURL.path,
+                    status: "running"
+                )
+                try ProcessManager.saveProcessInfo(processInfo)
+                
+                print("Process \(processName) started with PID: \(pid).")
+            } else {
+                throw RuntimeError("Failed to retrieve PID of the started process.")
+            }
+        }
+
+        func startAllProcesses() throws {
+            let processInfos = try ProcessManager.fetchAllProcessInfos()
+            let stoppedProcesses = processInfos.filter { $0.status == "stopped" || $0.status == "error" }
+            
+            if stoppedProcesses.isEmpty {
+                print("No stopped processes to start.")
+                return
+            }
+            
+            for processInfo in stoppedProcesses {
+                try startProcess(executable: processInfo.executable, name: processInfo.processName, restart: processInfo.restart, watch: false)
+            }
+        }
+        
+        private func splitCommandLine(_ commandLine: String) -> [String] {
+            var args = [String]()
+            var currentArg = ""
+            var isInQuotes = false
+            var iterator = commandLine.makeIterator()
+            while let char = iterator.next() {
+                if char == "\"" {
+                    isInQuotes.toggle()
+                } else if char == " " && !isInQuotes {
+                    if !currentArg.isEmpty {
+                        args.append(currentArg)
+                        currentArg = ""
+                    }
+                } else {
+                    currentArg.append(char)
+                }
+            }
+            if !currentArg.isEmpty {
+                args.append(currentArg)
+            }
+            return args
+        }
+
     }
 }
 
@@ -592,27 +1095,40 @@ extension SRM {
         static let configuration = CommandConfiguration(
             abstract: "Stop a running process managed by SRM.",
             discussion: """
-            The `stop` command stops a running process by its name.
+            The `stop` command stops a running process by its name or index.
 
-            Example:
-              - Stop a process: `srm stop MyApp`
+            Examples:
+              - Stop a process by name: `srm stop MyApp`
+              - Stop a process by index: `srm stop 1`
+              - Stop all processes: `srm stop all`
             """
         )
-
-        @Argument(help: "Name of the process to stop.")
-        var name: String
+        
+        @Argument(help: "Name or index of the process to stop, or 'all' to stop all processes.")
+        var nameOrIndex: String
 
         func run() throws {
+            if nameOrIndex.lowercased() == "all" {
+                try stopAllProcesses()
+            } else if let index = Int(nameOrIndex) {
+                // Stop process by index
+                try stopProcess(atIndex: index)
+            } else {
+                // Stop process by name
+                try stopProcess(named: nameOrIndex)
+            }
+        }
+
+        func stopProcess(named name: String) throws {
             print("Stopping process: \(name)")
 
             do {
-                guard let processInfo = try ProcessManager.fetchProcessInfo(for: name) else {
+                guard var processInfo = try ProcessManager.fetchProcessInfo(for: name) else {
                     print("No process found with name: \(name)")
                     return
                 }
 
-                let pid = processInfo.processIdentifier
-                if isProcessRunning(pid: pid) {
+                if let pid = processInfo.processIdentifier, isProcessRunning(pid: pid) {
                     #if os(Windows)
                     // Windows-specific kill command
                     let command = "taskkill /PID \(pid) /F"
@@ -626,18 +1142,43 @@ extension SRM {
                     print("Process \(name) is not running.")
                 }
 
-                // Remove process info after stopping
-                try ProcessManager.removeProcessInfo(for: name)
+                // Update process info to set status to "stopped" and remove pid and startTime
+                processInfo.status = "stopped"
+                processInfo.processIdentifier = nil
+                processInfo.startTime = nil
+                try ProcessManager.saveProcessInfo(processInfo)
             } catch {
                 print("An error occurred: \(error.localizedDescription)")
+            }
+        }
+
+        func stopProcess(atIndex index: Int) throws {
+            let processInfos = try ProcessManager.fetchAllProcessInfos()
+            if index < 1 || index > processInfos.count {
+                print("Invalid process index: \(index)")
+                return
+            }
+
+            let processInfo = processInfos[index - 1]
+            try stopProcess(named: processInfo.processName)
+        }
+
+        func stopAllProcesses() throws {
+            let processInfos = try ProcessManager.fetchAllProcessInfos()
+            if processInfos.isEmpty {
+                print("No processes to stop.")
+                return
+            }
+
+            for processInfo in processInfos {
+                try stopProcess(named: processInfo.processName)
             }
         }
 
         func isProcessRunning(pid: Int32) -> Bool {
             #if os(Windows)
             // Windows-specific implementation
-            // Placeholder: Implement process checking for Windows
-            return false
+            return false // Placeholder
             #else
             return kill(pid, 0) == 0
             #endif
@@ -657,11 +1198,12 @@ import Foundation
 
 struct CodableProcessInfo: Codable {
     let processName: String
-    let processIdentifier: Int32
-    let startTime: Date
+    var processIdentifier: Int32?
+    var startTime: Date?
     let restart: Bool
     let executable: String
     let logFilePath: String
+    var status: String
 }
 
 struct ProcessManager {
@@ -681,11 +1223,16 @@ struct ProcessManager {
         let data = try Data(contentsOf: filePath)
         return try JSONDecoder().decode(CodableProcessInfo.self, from: data)
     }
-
+    
     static func removeProcessInfo(for name: String) throws {
         let filePath = logsDirectory.appendingPathComponent("\(name).json")
         if FileManager.default.fileExists(atPath: filePath.path) {
             try FileManager.default.removeItem(at: filePath)
+        }
+
+        let logFilePath = logsDirectory.appendingPathComponent("\(name).log")
+        if FileManager.default.fileExists(atPath: logFilePath.path) {
+            try FileManager.default.removeItem(at: logFilePath)
         }
     }
 
@@ -731,11 +1278,13 @@ struct SRM: ParsableCommand {
         subcommands: [
             Start.self,
             Stop.self,
+            Restart.self,
             List.self,
             Logs.self,
             Monitor.self,
             Setup.self,
             Destroy.self,
+            Delete.self,
             HelpCommand.self
         ],
         defaultSubcommand: HelpCommand.self
