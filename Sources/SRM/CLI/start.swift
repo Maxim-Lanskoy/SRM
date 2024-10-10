@@ -46,11 +46,23 @@ extension SRM {
             if executableOrName?.lowercased() == "all" {
                 try startAllProcesses()
             } else if let executable = executableOrName {
-                // Start a new process with the provided executable
-                try startProcess(executable: executable, name: name, restart: restart, watch: watch)
+                // Automatically detect if this should be a Swift target
+                let isSwiftTarget = !FileManager.default.fileExists(atPath: executable) && executable.split(separator: ".").count == 1
+                
+                if isSwiftTarget {
+                    try startSwiftTarget(targetName: executable, name: name, restart: restart, watch: watch)
+                } else {
+                    // Start a new process with the provided executable
+                    try startProcess(executable: executable, name: name, restart: restart, watch: watch)
+                }
             } else {
                 print("Please provide an executable to start or 'all' to start all stopped processes.")
             }
+        }
+
+        func startSwiftTarget(targetName: String, name: String?, restart: Bool, watch: Bool) throws {
+            let swiftRunCommand = "swift run \(targetName)"
+            try startProcess(executable: swiftRunCommand, name: name, restart: restart, watch: watch)
         }
 
         func startProcess(executable: String, name: String?, restart: Bool, watch: Bool) throws {
