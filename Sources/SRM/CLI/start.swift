@@ -210,6 +210,7 @@ extension SRM {
             // Prepare the command
             let command = """
             nohup stdbuf -oL \(executable) > \(logFileURL.path) 2>&1 & echo $! && disown
+
             """
             
             // Prepare the process

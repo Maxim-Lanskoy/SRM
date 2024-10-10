@@ -31,7 +31,7 @@ struct SwiftFileConcatenator {
     // Do not include any explanations, comments, or repeated parts from the input code.
     """*/
     
-    static var requestHeader = "\n\n**Request: \"-=-=-=-\".**\n\n"
+    static var requestHeader = "**Request: \"-=-=-=-\".**\n\n"
     
     static var additionalInfo = """
     Hi! I'm making SRM (Swift Running Manager).
@@ -102,7 +102,7 @@ struct SwiftFileConcatenator {
     srm list
     Conclusion:
 
-    SRM aims to be a simple yet powerful tool for process management in the development and deployment of applications. By providing essential features similar to pm2, it helps users manage processes effectively without the overhead of larger process management systems.
+    SRM aims to be a simple yet powerful tool for process management in the development and deployment of applications. By providing essential features similar to pm2, it helps users manage processes effectively without the overhead of larger process management systems.\n
     """
 
     static var swiftFilesAndContent = ""
