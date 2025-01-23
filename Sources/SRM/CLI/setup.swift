@@ -98,6 +98,8 @@ extension SRM {
                             break
                         } else {
                             print("PATH entry already exists in \(configFile.lastPathComponent)")
+                            configUpdated = true
+                            break
                         }
                     } catch {
                         print("Error updating \(configFile.lastPathComponent): \(error)")
@@ -107,21 +109,12 @@ extension SRM {
             
             // If no existing config file was updated, create .bashrc
             if !configUpdated {
-                print("No existing shell config files found. Creating .bashrc...")
-                let bashrcPath = homeDir.appendingPathComponent(".bashrc")
-                do {
-                    try exportLine.write(to: bashrcPath, atomically: true, encoding: .utf8)
-                    print("Created new .bashrc with PATH configuration")
-                    configUpdated = true
-                    updatedConfigPath = bashrcPath
-                } catch {
-                    throw RuntimeError("Failed to create .bashrc: \(error)")
-                }
+                print("🔄 No existing shell config files found. Please add this line to your shell profile: \(exportLine)")
             }
             
             // Source the updated/created config file
             if let configPath = updatedConfigPath {
-                print("\nApplying changes to current shell environment...")
+                print("Applying changes to current shell environment...")
                 do {
                     // Export PATH directly for current session
                     try shellOut(to: "export PATH=\"$PATH:\(buildPath)\"")
@@ -138,10 +131,14 @@ extension SRM {
                         }
                     }
                     
-                    print("\nEnvironment has been updated! Current PATH:")
-                    try shellOut(to: "echo $PATH")
+                    let currentPath = try? shellOut(to: "echo $PATH")
+                    if let currentPath = currentPath {
+                        print("Environment has been updated! Current PATH: \n- \(currentPath)")
+                    } else {
+                        print("Environment has been updated!")
+                    }
                 } catch {
-                    print("\nNote: Please run the following command or restart your terminal:")
+                    print("Note: Please run the following command or restart your terminal:")
                     print("    source \(configPath.path)")
                 }
             }
