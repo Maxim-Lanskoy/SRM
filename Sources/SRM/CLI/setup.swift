@@ -57,63 +57,92 @@ extension SRM {
             let buildPath = FileManager.default.currentDirectoryPath + "/.build/release"
             let exportLine = "\n# Swift Running Manager path:\nexport PATH=\"$PATH:\(buildPath)\"\n"
             
-            // Try to modify shell config files
-            let shellConfigFiles = [".bashrc", ".zshrc", ".bash_profile", ".profile"]
-            var configUpdated = false
-            var updatedConfigPath: String? = nil
+            // Get user's home directory
+            let homeDir = FileManager.default.homeDirectoryForCurrentUser
+            print("Home directory: \(homeDir.path)")
             
-            // Detect current shell
+            // Get current shell and user
             let currentShell = try? shellOut(to: "echo $SHELL")
+            let currentUser = try? shellOut(to: "whoami")
+            print("Current shell: \(currentShell ?? "unknown")")
+            print("Current user: \(currentUser ?? "unknown")")
             
-            for fileName in shellConfigFiles {
-                let configPath = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(fileName)
-                if FileManager.default.fileExists(atPath: configPath.path) {
-                    var content = (try? String(contentsOf: configPath, encoding: .utf8)) ?? ""
-                    if !content.contains(buildPath) {
-                        content += exportLine
-                        try content.write(to: configPath, atomically: true, encoding: .utf8)
-                        print("Updated PATH in \(fileName)")
-                        configUpdated = true
-                        updatedConfigPath = configPath.path
-                        break
+            // List of config files with full paths
+            let shellConfigFiles = [
+                homeDir.appendingPathComponent(".bashrc"),
+                homeDir.appendingPathComponent(".zshrc"),
+                homeDir.appendingPathComponent(".bash_profile"),
+                homeDir.appendingPathComponent(".profile")
+            ]
+            
+            // Debug: List all potential config files and their existence
+            for configFile in shellConfigFiles {
+                let exists = FileManager.default.fileExists(atPath: configFile.path)
+                print("Checking \(configFile.path) - exists: \(exists)")
+            }
+            
+            // Try to find and update an existing config file
+            var configUpdated = false
+            var updatedConfigPath: URL? = nil
+            
+            for configFile in shellConfigFiles {
+                if FileManager.default.fileExists(atPath: configFile.path) {
+                    do {
+                        var content = try String(contentsOf: configFile, encoding: .utf8)
+                        if !content.contains(buildPath) {
+                            content += exportLine
+                            try content.write(to: configFile, atomically: true, encoding: .utf8)
+                            print("Successfully updated PATH in \(configFile.lastPathComponent)")
+                            configUpdated = true
+                            updatedConfigPath = configFile
+                            break
+                        } else {
+                            print("PATH entry already exists in \(configFile.lastPathComponent)")
+                        }
+                    } catch {
+                        print("Error updating \(configFile.lastPathComponent): \(error)")
                     }
                 }
             }
             
+            // If no existing config file was updated, create .bashrc
             if !configUpdated {
-                print("Warning: Could not update PATH in any shell configuration file.")
-                return
+                print("No existing shell config files found. Creating .bashrc...")
+                let bashrcPath = homeDir.appendingPathComponent(".bashrc")
+                do {
+                    try exportLine.write(to: bashrcPath, atomically: true, encoding: .utf8)
+                    print("Created new .bashrc with PATH configuration")
+                    configUpdated = true
+                    updatedConfigPath = bashrcPath
+                } catch {
+                    throw RuntimeError("Failed to create .bashrc: \(error)")
+                }
             }
             
-            // Re-source the environment based on the current shell
+            // Source the updated/created config file
             if let configPath = updatedConfigPath {
                 print("\nApplying changes to current shell environment...")
-                
-                // Attempt to source the updated config file
-                if let shell = currentShell?.trimmingCharacters(in: .whitespacesAndNewlines) {
-                    do {
+                do {
+                    // Export PATH directly for current session
+                    try shellOut(to: "export PATH=\"$PATH:\(buildPath)\"")
+                    
+                    // Try to source the config file
+                    if let shell = currentShell?.trimmingCharacters(in: .whitespacesAndNewlines) {
                         switch shell {
                         case let sh where sh.hasSuffix("/bash"):
-                            try shellOut(to: "bash -c 'source \(configPath)'")
-                            print("Sourced bash configuration.")
+                            try shellOut(to: "bash -c 'source \(configPath.path)'")
                         case let sh where sh.hasSuffix("/zsh"):
-                            try shellOut(to: "zsh -c 'source \(configPath)'")
-                            print("Sourced zsh configuration.")
+                            try shellOut(to: "zsh -c 'source \(configPath.path)'")
                         default:
-                            // For other shells, try a generic source approach
-                            try shellOut(to: "source \(configPath)")
-                            print("Attempted to source shell configuration.")
+                            try shellOut(to: "source \(configPath.path)")
                         }
-                        // Export the PATH directly for the current session
-                        try shellOut(to: "export PATH=\"$PATH:\(buildPath)\"")
-                        
-                        print("\nEnvironment has been updated successfully.")
-                        print("Note: Some shells may require you to start a new terminal session for changes to take full effect.")
-                    } catch {
-                        print("\nWarning: Could not automatically apply changes to the current shell.")
-                        print("Please run the following command manually or start a new terminal session:")
-                        print("    source \(configPath)")
                     }
+                    
+                    print("\nEnvironment has been updated! Current PATH:")
+                    try shellOut(to: "echo $PATH")
+                } catch {
+                    print("\nNote: Please run the following command or restart your terminal:")
+                    print("    source \(configPath.path)")
                 }
             }
         }
