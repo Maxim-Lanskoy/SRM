@@ -23,8 +23,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Maxim-Lanskoy/ShellOut.git",
       "state" : {
-        "revision" : "a3ac739c464b7d6f6cda973d57634fa96bbb1353",
-        "version" : "2.3.1"
+        "revision" : "de07a8d3de6777ec16cb6ee4a1793109f4a3e9b8",
+        "version" : "2.4.0"
       }
     },
     {

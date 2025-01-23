@@ -454,8 +454,55 @@ extension SRM {
                 return
             }
             
-            // Display logs for all processes sequentially
+            var logLines = [(String, String)]() // Tuple to hold (process name, log line)
+
+            // Read the last N lines from all log files
+            for processInfo in processInfos {
+                let logFilePath = ProcessManager.logsDirectory.appendingPathComponent("\(processInfo.processName).log")
+                
+                guard FileManager.default.fileExists(atPath: logFilePath.path) else {
+                    print("No logs found for process: \(processInfo.processName)")
+                    continue
+                }
+
+                let logData = try String(contentsOfFile: logFilePath.path, encoding: .utf8)
+                let lines = logData.split(separator: "\n").suffix(self.lines)
+                for line in lines {
+                    logLines.append((processInfo.processName, String(line)))
+                }
+            }
+
+            // Sort log lines by their timestamp (assuming the format includes a timestamp)
+            logLines.sort { lhs, rhs in
+                extractTimestamp(from: lhs.1) < extractTimestamp(from: rhs.1)
+            }
+
+            // Print the sorted log lines
+            for (processName, line) in logLines {
+                print("[\(processName)] \(line)")
+            }
+
+            if !noFollow {
+                print("Tailing logs for all processes. Press Ctrl+C to stop.")
+                tailLogsForAllProcesses(processInfos: processInfos)
+            }
+        }
+
+        func extractTimestamp(from logLine: String) -> Date {
+            // Assuming the timestamp format is: [YYYY-MM-DD HH:MM:SS]
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "[yyyy-MM-dd HH:mm:ss]"
+            
+            let components = logLine.split(separator: "]", maxSplits: 1, omittingEmptySubsequences: true)
+            if let dateString = components.first?.trimmingCharacters(in: .whitespacesAndNewlines) {
+                return dateFormatter.date(from: dateString) ?? Date.distantPast
+            }
+            return Date.distantPast
+        }
+
+        func tailLogsForAllProcesses(processInfos: [CodableProcessInfo]) {
             var allFileHandles: [FileHandle] = []
+
             defer {
                 allFileHandles.forEach { $0.closeFile() }
             }
@@ -464,37 +511,25 @@ extension SRM {
                 let logFilePath = ProcessManager.logsDirectory.appendingPathComponent("\(processInfo.processName).log")
                 
                 guard FileManager.default.fileExists(atPath: logFilePath.path) else {
-                    print("No logs found for process: \(processInfo.processName)")
                     continue
                 }
                 
                 guard let fileHandle = FileHandle(forReadingAtPath: logFilePath.path) else {
-                    print("Unable to open log file for \(processInfo.processName).")
                     continue
                 }
                 
                 allFileHandles.append(fileHandle)
-                
-                // Read the last N lines
-                let logData = try String(contentsOfFile: logFilePath.path, encoding: .utf8)
-                let logLines = logData.split(separator: "\n").suffix(lines)
-                
-                for line in logLines {
-                    print("[\(processInfo.processName)] \(line)")
-                }
-            }
-
-            print("Tailing logs for all processes. Press Ctrl+C to stop.")
-            
-            // Observe each file for new data
-            for (index, fileHandle) in allFileHandles.enumerated() {
-                let processName = processInfos[index].processName
                 fileHandle.seekToEndOfFile()
 
+                // Observe each file for new data
+                let processName = processInfo.processName
                 fileHandle.readabilityHandler = { handle in
                     let data = handle.availableData
                     if let logEntry = String(data: data, encoding: .utf8) {
-                        print("[\(processName)] \(logEntry)", terminator: "")
+                        let lines = logEntry.split(separator: "\n")
+                        for line in lines {
+                            print("[\(processName)] \(line)")
+                        }
                     }
                 }
             }
@@ -718,14 +753,14 @@ extension SRM {
                 print("Process \(name) with PID \(pid) has been stopped.")
             }
 
-            // Update process info to set status to "stopped"
+            // Set status to "stopped"
             var updatedProcessInfo = processInfo
             updatedProcessInfo.status = "stopped"
             updatedProcessInfo.processIdentifier = nil
             updatedProcessInfo.startTime = nil
             try ProcessManager.saveProcessInfo(updatedProcessInfo)
-
-            // Start the process again using the Start command
+            
+            // Start the process again
             var startCommand = Start()
             startCommand.executableOrName = processInfo.executable
             startCommand.name = processInfo.processName

@@ -9,7 +9,7 @@ import Foundation
 
 @main
 struct SwiftFileConcatenator {
-    static let projectRoot = "/Users/maximlanskoy/SRM/"
+    static let projectRoot = "/home/rpi5/SRM/"
     static let outputFilePath = "\(projectRoot)/Sources/Concatenator/ConcatenatedSwiftFiles.txt"
     
     static var asciiTree: String? {

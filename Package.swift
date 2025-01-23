@@ -16,8 +16,8 @@ let package = Package(
         .executable(name: "srm", targets: ["SRM"]),
     ],
     dependencies: [
-        .package(url: argParserUrl,  from: "1.3.0"),
-        .package(url: shellOutLink,  from: "2.3.1"),
+        .package(url: argParserUrl,  from: "1.5.0"),
+        .package(url: shellOutLink,  from: "2.4.0"),
         .package(url: cliTablesUrl, branch: "main"),
     ],
     targets: [
