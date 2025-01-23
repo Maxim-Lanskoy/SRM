@@ -26,13 +26,14 @@ extension SRM {
             try buildRelease()
 
             // Step 3: Set up PATH
-            try setupPath()
+            let command = try setupPath()
 
             // Step 4: Set up service based on OS
             try setupService()
             
             print("✨ SRM setup completed successfully!")
             print("🚀 Type 'srm --help' command for info.")
+            print("🔄 Please start a new terminal session or run \(command) to use SRM.")
         }
 
         private func createRequiredDirectories() throws {
@@ -53,7 +54,7 @@ extension SRM {
             try shellOut(to: "swift build -c release")
         }
 
-        private func setupPath() throws {
+        private func setupPath() throws -> String {
             let buildPath = FileManager.default.currentDirectoryPath + "/.build/release"
             let exportLine = "\n# Swift Running Manager path:\nexport PATH=\"$PATH:\(buildPath)\"\n"
             
@@ -112,6 +113,8 @@ extension SRM {
                 print("🔄 No existing shell config files found. Please add this line to your shell profile: \(exportLine)")
             }
             
+            var command = "'source ~/.bashrc' or 'source ~/.zshrc'"
+            
             // Source the updated/created config file
             if let configPath = updatedConfigPath {
                 print("Applying changes to current shell environment...")
@@ -123,17 +126,16 @@ extension SRM {
                     if let shell = currentShell?.trimmingCharacters(in: .whitespacesAndNewlines) {
                         switch shell {
                         case let sh where sh.hasSuffix("/bash"):
-                            try shellOut(to: "bash -c 'source \(configPath.path)'")
+                            command = "'source \(configPath.path)'"
                         case let sh where sh.hasSuffix("/zsh"):
-                            try shellOut(to: "zsh -c 'source \(configPath.path)'")
+                            command = "'source \(configPath.path)'"
                         default:
-                            try shellOut(to: "source \(configPath.path)")
+                            command = "'source \(configPath.path)'"
                         }
                     }
-                    
                     let currentPath = try? shellOut(to: "echo $PATH")
-                    if let currentPath = currentPath {
-                        print("Environment has been updated! Current PATH: \n- \(currentPath)")
+                    if let currentPath = currentPath, let swiftPath = currentPath.components(separatedBy: ":").first {
+                        print("Environment has been updated! Current PATH: \n- \(swiftPath)")
                     } else {
                         print("Environment has been updated!")
                     }
@@ -142,6 +144,7 @@ extension SRM {
                     print("    source \(configPath.path)")
                 }
             }
+            return command
         }
 
         private func setupService() throws {
