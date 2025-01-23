@@ -115,7 +115,9 @@ extension SRM {
             
             // Create or open the log file
             if !FileManager.default.fileExists(atPath: logFileURL.path) {
-                FileManager.default.createFile(atPath: logFileURL.path, contents: nil, attributes: nil)
+                guard FileManager.default.createFile(atPath: logFileURL.path, contents: nil, attributes: nil) else {
+                    throw RuntimeError("Failed to create log file at \(logFileURL.path)")
+                }
             }
             let logFileHandle = try FileHandle(forWritingTo: logFileURL)
             logFileHandle.seekToEndOfFile()
