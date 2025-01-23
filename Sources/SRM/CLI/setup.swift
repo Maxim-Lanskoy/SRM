@@ -31,7 +31,7 @@ extension SRM {
             // Step 4: Set up service based on OS
             try setupService()
             
-            print("\n✨ SRM setup completed successfully!")
+            print("✨ SRM setup completed successfully!")
             print("🚀 Type 'srm --help' command for info.")
         }
 
