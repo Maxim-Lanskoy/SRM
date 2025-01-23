@@ -821,79 +821,170 @@ extension SRM {
             abstract: "Setup the SRM CLI globally.",
             discussion: """
             The `setup` command builds the SRM tool and adds it to your PATH.
-
-            - Detects your shell and updates the appropriate configuration file.
-            - Supports zsh, bash, and other common shells.
             """
         )
 
         func run() throws {
-            // Step 1: Build the release version
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-            process.arguments = ["swift", "build", "-c", "release"]
+            // Step 1: Create necessary directories
+            try createRequiredDirectories()
 
-            try process.run()
-            process.waitUntilExit()
+            // Step 2: Build the release version
+            try buildRelease()
 
-            let result = process.terminationStatus
-            if result != 0 {
-                throw RuntimeError("Build failed.")
-            }
+            // Step 3: Set up PATH
+            try setupPath()
 
-            // Step 2: Get the absolute path of the built SRM binary
-            let buildPath = FileManager.default.currentDirectoryPath + "/.build/release"
-            let exportLine = "# Swift Running Manager path:\nexport PATH=\"$PATH:\(buildPath)\""
-
-            // Step 3: Set up the PATH for SRM in the shell configuration file
-            let shellConfigFiles = [".zshrc", ".bashrc", ".bash_profile", ".profile"]
-            var updatedConfigFilePath: URL? = nil
-
-            for fileName in shellConfigFiles {
-                let configFile = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(fileName)
-                if FileManager.default.fileExists(atPath: configFile.path) {
-                    var fileContents = try String(contentsOf: configFile, encoding: .utf8)
-
-                    // Check if the export line already exists
-                    if !fileContents.contains(exportLine) {
-                        // Append the export line if not already present
-                        fileContents += "\n" + exportLine + "\n"
-                        try fileContents.write(to: configFile, atomically: true, encoding: .utf8)
-                        updatedConfigFilePath = configFile
-                        print("SRM setup completed successfully in \(configFile.path).")
-                    } else {
-                        print("The PATH entry already exists in \(configFile.path). Skipping...")
-                    }
-                    break
-                }
-            }
-
-            // Step 4: Register monitoring service
-            #if os(macOS)
-            try setupLaunchdService()
-            #elseif os(Linux)
-            try setupSystemdService()
-            #endif
-
-            // Step 5: Source the shell configuration file to apply changes
-            if let configFilePath = updatedConfigFilePath {
-                try shellOut(to: "source \(configFilePath.path)")
-                print("Applied changes to the current shell environment.")
-            }
-
-            // Automatically start the monitoring service in the background
-            print("Starting SRM monitor service in the background...")
-            let monitorProcess = Process()
-            monitorProcess.executableURL = URL(fileURLWithPath: "/bin/sh")
-            monitorProcess.arguments = ["-c", "nohup srm monitor > ~/.srm/monitor.log 2>&1 &"]
-            monitorProcess.environment = ["SRM_AUTOMATIC_RUN": "true"]
-
-            try monitorProcess.run()
-            monitorProcess.waitUntilExit()
-
-            print("SRM monitoring service has been started in the background.")
+            // Step 4: Set up service based on OS
+            try setupService()
+            
+            print("\n✨ SRM setup completed successfully!")
+            print("🚀 Type 'srm --help' command for info.")
         }
 
+        private func createRequiredDirectories() throws {
+            // Create .srm directory in home
+            let srmDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".srm")
+            try FileManager.default.createDirectory(at: srmDir, withIntermediateDirectories: true, attributes: nil)
+            
+            // Create logs directory
+            try FileManager.default.createDirectory(at: ProcessManager.logsDirectory, withIntermediateDirectories: true, attributes: nil)
+            
+            // Set proper permissions
+            try shellOut(to: "chmod", arguments: ["755", srmDir.path])
+            try shellOut(to: "chmod", arguments: ["755", ProcessManager.logsDirectory.path])
+        }
+
+        private func buildRelease() throws {
+            print("Building SRM in release mode...")
+            try shellOut(to: "swift build -c release")
+        }
+
+        private func setupPath() throws {
+            let buildPath = FileManager.default.currentDirectoryPath + "/.build/release"
+            let exportLine = "\n# Swift Running Manager path:\nexport PATH=\"$PATH:\(buildPath)\"\n"
+            
+            // Try to modify shell config files
+            let shellConfigFiles = [".bashrc", ".zshrc", ".bash_profile", ".profile"]
+            var configUpdated = false
+            var updatedConfigPath: String? = nil
+            
+            // Detect current shell
+            let currentShell = try? shellOut(to: "echo $SHELL")
+            
+            for fileName in shellConfigFiles {
+                let configPath = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(fileName)
+                if FileManager.default.fileExists(atPath: configPath.path) {
+                    var content = (try? String(contentsOf: configPath, encoding: .utf8)) ?? ""
+                    if !content.contains(buildPath) {
+                        content += exportLine
+                        try content.write(to: configPath, atomically: true, encoding: .utf8)
+                        print("Updated PATH in \(fileName)")
+                        configUpdated = true
+                        updatedConfigPath = configPath.path
+                        break
+                    }
+                }
+            }
+            
+            if !configUpdated {
+                print("Warning: Could not update PATH in any shell configuration file.")
+                return
+            }
+            
+            // Re-source the environment based on the current shell
+            if let configPath = updatedConfigPath {
+                print("\nApplying changes to current shell environment...")
+                
+                // Attempt to source the updated config file
+                if let shell = currentShell?.trimmingCharacters(in: .whitespacesAndNewlines) {
+                    do {
+                        switch shell {
+                        case let sh where sh.hasSuffix("/bash"):
+                            try shellOut(to: "bash -c 'source \(configPath)'")
+                            print("Sourced bash configuration.")
+                        case let sh where sh.hasSuffix("/zsh"):
+                            try shellOut(to: "zsh -c 'source \(configPath)'")
+                            print("Sourced zsh configuration.")
+                        default:
+                            // For other shells, try a generic source approach
+                            try shellOut(to: "source \(configPath)")
+                            print("Attempted to source shell configuration.")
+                        }
+                        // Export the PATH directly for the current session
+                        try shellOut(to: "export PATH=\"$PATH:\(buildPath)\"")
+                        
+                        print("\nEnvironment has been updated successfully.")
+                        print("Note: Some shells may require you to start a new terminal session for changes to take full effect.")
+                    } catch {
+                        print("\nWarning: Could not automatically apply changes to the current shell.")
+                        print("Please run the following command manually or start a new terminal session:")
+                        print("    source \(configPath)")
+                    }
+                }
+            }
+        }
+
+        private func setupService() throws {
+            #if os(Linux)
+            try setupSystemdService()
+            #elseif os(macOS)
+            try setupLaunchdService()
+            #endif
+        }
+
+        private func setupSystemdService() throws {
+            let serviceContent = """
+            [Unit]
+            Description=SRM Monitoring Service
+            After=network.target
+
+            [Service]
+            Type=simple
+            User=\(NSUserName())
+            Environment="SRM_AUTOMATIC_RUN=true"
+            ExecStart=\(FileManager.default.currentDirectoryPath)/.build/release/srm monitor
+            Restart=always
+            RestartSec=5
+
+            [Install]
+            WantedBy=multi-user.target
+            """
+
+            // First try user service
+            let userServiceDir = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent(".config/systemd/user")
+            
+            do {
+                try FileManager.default.createDirectory(at: userServiceDir,
+                                                      withIntermediateDirectories: true,
+                                                      attributes: nil)
+                let servicePath = userServiceDir.appendingPathComponent("srm-monitor.service")
+                try serviceContent.write(to: servicePath, atomically: true, encoding: .utf8)
+                
+                // Enable and start the user service
+                try shellOut(to: "systemctl --user daemon-reload")
+                try shellOut(to: "systemctl --user enable srm-monitor")
+                try shellOut(to: "systemctl --user start srm-monitor")
+                
+                print("SRM monitor service has been set up as a user service.")
+            } catch {
+                print("Warning: Could not set up user service. Error: \(error)")
+                print("Attempting to set up system service (requires sudo)...")
+                
+                // Create temporary file
+                let tempFile = "/tmp/srm-monitor.service"
+                try serviceContent.write(toFile: tempFile, atomically: true, encoding: .utf8)
+                
+                // Move to system directory using sudo
+                try shellOut(to: "sudo mv \(tempFile) /etc/systemd/system/srm-monitor.service")
+                try shellOut(to: "sudo systemctl daemon-reload")
+                try shellOut(to: "sudo systemctl enable srm-monitor")
+                try shellOut(to: "sudo systemctl start srm-monitor")
+                
+                print("SRM monitor service has been set up as a system service.")
+            }
+        }
+        
         // macOS-specific launchd setup
         func setupLaunchdService() throws {
             let plistPath = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/LaunchAgents/com.srm.monitor.plist")
@@ -930,44 +1021,6 @@ extension SRM {
             // Load the new service
             try shellOut(to: "launchctl", arguments: ["load", plistPath.path])
             print("SRM monitoring service has been loaded with launchd.")
-        }
-
-        // Linux-specific systemd setup
-        func setupSystemdService() throws {
-            let servicePath = "/etc/systemd/system/srm-monitor.service"
-            let serviceContent = """
-            [Unit]
-            Description=SRM Monitoring Service
-            After=network.target
-
-            [Service]
-            ExecStart=/usr/local/bin/srm monitor
-            Restart=always
-            RestartSec=5
-
-            [Install]
-            WantedBy=multi-user.target
-            """
-            
-            // Write systemd service content
-            try serviceContent.write(toFile: servicePath, atomically: true, encoding: .utf8)
-            
-            // Reload systemd to reflect changes
-            print("Reloading systemd daemon...")
-            try shellOut(to: "systemctl", arguments: ["daemon-reload"])
-
-            // Check if the service is already enabled
-            let serviceStatus = try? shellOut(to: "systemctl", arguments: ["is-active", "srm-monitor"])
-            if serviceStatus == "active" {
-                print("SRM monitoring service is currently running. Restarting to apply updates...")
-                try shellOut(to: "systemctl", arguments: ["restart", "srm-monitor"])
-            } else {
-                print("Enabling SRM monitoring service...")
-                try shellOut(to: "systemctl", arguments: ["enable", "srm-monitor"])
-                try shellOut(to: "systemctl", arguments: ["start", "srm-monitor"])
-            }
-            
-            print("SRM monitoring service has been set up with systemd.")
         }
     }
 }
@@ -1090,7 +1143,9 @@ extension SRM {
             
             // Create or open the log file
             if !FileManager.default.fileExists(atPath: logFileURL.path) {
-                FileManager.default.createFile(atPath: logFileURL.path, contents: nil, attributes: nil)
+                guard FileManager.default.createFile(atPath: logFileURL.path, contents: nil, attributes: nil) else {
+                    throw RuntimeError("Failed to create log file at \(logFileURL.path)")
+                }
             }
             let logFileHandle = try FileHandle(forWritingTo: logFileURL)
             logFileHandle.seekToEndOfFile()

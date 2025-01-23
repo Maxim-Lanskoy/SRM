@@ -30,6 +30,9 @@ extension SRM {
 
             // Step 4: Set up service based on OS
             try setupService()
+            
+            print("\n✨ SRM setup completed successfully!")
+            print("🚀 Type 'srm --help' command for info.")
         }
 
         private func createRequiredDirectories() throws {
@@ -57,6 +60,10 @@ extension SRM {
             // Try to modify shell config files
             let shellConfigFiles = [".bashrc", ".zshrc", ".bash_profile", ".profile"]
             var configUpdated = false
+            var updatedConfigPath: String? = nil
+            
+            // Detect current shell
+            let currentShell = try? shellOut(to: "echo $SHELL")
             
             for fileName in shellConfigFiles {
                 let configPath = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(fileName)
@@ -67,6 +74,7 @@ extension SRM {
                         try content.write(to: configPath, atomically: true, encoding: .utf8)
                         print("Updated PATH in \(fileName)")
                         configUpdated = true
+                        updatedConfigPath = configPath.path
                         break
                     }
                 }
@@ -74,6 +82,39 @@ extension SRM {
             
             if !configUpdated {
                 print("Warning: Could not update PATH in any shell configuration file.")
+                return
+            }
+            
+            // Re-source the environment based on the current shell
+            if let configPath = updatedConfigPath {
+                print("\nApplying changes to current shell environment...")
+                
+                // Attempt to source the updated config file
+                if let shell = currentShell?.trimmingCharacters(in: .whitespacesAndNewlines) {
+                    do {
+                        switch shell {
+                        case let sh where sh.hasSuffix("/bash"):
+                            try shellOut(to: "bash -c 'source \(configPath)'")
+                            print("Sourced bash configuration.")
+                        case let sh where sh.hasSuffix("/zsh"):
+                            try shellOut(to: "zsh -c 'source \(configPath)'")
+                            print("Sourced zsh configuration.")
+                        default:
+                            // For other shells, try a generic source approach
+                            try shellOut(to: "source \(configPath)")
+                            print("Attempted to source shell configuration.")
+                        }
+                        // Export the PATH directly for the current session
+                        try shellOut(to: "export PATH=\"$PATH:\(buildPath)\"")
+                        
+                        print("\nEnvironment has been updated successfully.")
+                        print("Note: Some shells may require you to start a new terminal session for changes to take full effect.")
+                    } catch {
+                        print("\nWarning: Could not automatically apply changes to the current shell.")
+                        print("Please run the following command manually or start a new terminal session:")
+                        print("    source \(configPath)")
+                    }
+                }
             }
         }
 
